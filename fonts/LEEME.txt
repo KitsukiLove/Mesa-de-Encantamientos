@@ -1,8 +1,1 @@
-Copia aquí las fuentes de tu KixKi Store (carpeta fonts/) con estos nombres exactos:
-
-  PixelifySans.woff2   (Pixelify Sans, variable 400-700)
-  Jersey10.woff2       (Jersey 10)
-
-Si tus archivos tienen otro nombre, cámbialo aquí o edita las dos líneas @font-face
-al inicio de css/style.css. Mientras no estén, el test usa una fuente monoespaciada
-de respaldo y funciona igual (el navegador solo mostrará un aviso 404 en la consola).
+voi a borrar esta wea skibidi toilet troilaido si lo leeiste (baile torleo ggez)
