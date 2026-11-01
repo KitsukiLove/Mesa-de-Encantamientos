@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es" data-theme="dark" data-style="pixel" data-motion="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#150c33">
+  <meta name="description" content="Descubre qué encantamiento de Minecraft eres con 70 preguntas. Un test de personalidad hecho con cariño por KitsukiLove.">
+  <title>Mesa de Encantos</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <canvas id="scene2d" aria-hidden="true" hidden></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <button class="gear px" id="btnSettings" type="button" aria-label="Abrir ajustes" aria-haspopup="dialog">
+    <svg viewBox="0 0 12 12" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M5 0h2v2h2v1h1v2h2v2h-2v2H9v1H7v2H5v-2H3V9H2V7H0V5h2V3h1V2h2zM5 4v4h2V4z" fill-rule="evenodd"/></svg>
+  </button>
+
+  <div id="bubble" class="bubble px" role="status" aria-live="polite" hidden>
+    <span class="who">KIXKI</span><span id="bubbleText"></span>
+  </div>
+
+  <main id="ui">
+    <!-- INTRO -->
+    <section id="screen-intro" class="win px" data-screen aria-labelledby="introTitle">
+      <header class="titlebar"><span class="tb-name">encantar.exe</span><span class="tb-btns" aria-hidden="true"><i></i><i></i><i class="x"></i></span></header>
+      <div class="win-body intro">
+        <p class="kicker">Test de personalidad</p>
+        <h1 id="introTitle" class="logo"><span>MESA DE</span><span>ENCANTOS</span></h1>
+        <p class="lead">¿Qué encantamiento de Minecraft eres? Responde 70 preguntas con calma y la mesa descubrirá tu libro.</p>
+        <ul class="facts" aria-label="Datos del test">
+          <li><b>70</b> preguntas</li><li><b>14</b> encantamientos</li><li><b>~12</b> minutos</li>
+        </ul>
+        <div class="actions">
+          <button class="btn pri px" id="btnStart" type="button">Comenzar</button>
+          <button class="btn px" id="btnResume" type="button" hidden>Continuar</button>
+        </div>
+        <p class="fine">Es solo para divertirse: no es un diagnóstico ni una prueba psicológica.</p>
+      </div>
+    </section>
+
+    <!-- PREGUNTAS -->
+    <section id="screen-quiz" class="win px" data-screen hidden aria-labelledby="qText">
+      <header class="titlebar"><span class="tb-name" id="qFile">pregunta-01.exe</span><span class="tb-btns" aria-hidden="true"><i></i><i></i><i class="x"></i></span></header>
+      <div class="win-body quiz">
+        <div class="xp" id="xpWrap">
+          <span class="lvl px" id="xpLvl" aria-hidden="true">1</span>
+          <div class="xpbar" role="progressbar" aria-label="Progreso del test" aria-valuemin="0" aria-valuemax="70" aria-valuenow="0" id="xpBar">
+            <div class="xpfill" id="xpFill"></div><div class="xpticks" aria-hidden="true"></div>
+          </div>
+          <span class="xpnum" id="xpNum">1 / 70</span>
+        </div>
+        <p class="chip px" id="qTheme">Social</p>
+        <h2 class="qtext" id="qText" tabindex="-1">…</h2>
+        <div class="opts" id="opts" role="group" aria-label="Respuestas"></div>
+        <div class="quizfoot">
+          <button class="btn sm px" id="btnBack" type="button">← Volver</button>
+          <span class="hint" id="qHint">Teclas 1–4 para elegir</span>
+          <button class="btn sm px" id="btnExit" type="button">Salir</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RITUAL -->
+    <section id="screen-ritual" data-screen hidden aria-live="assertive">
+      <p class="ritual-txt" id="ritualTxt">Encantando…</p>
+      <div class="ritual-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    </section>
+
+    <!-- RESULTADO -->
+    <section id="screen-result" data-screen hidden aria-labelledby="rName">
+      <div class="result-spacer" aria-hidden="true"></div>
+      <div class="win px result-win">
+        <header class="titlebar"><span class="tb-name">resultado.exe</span><span class="tb-btns" aria-hidden="true"><i></i><i></i><i class="x"></i></span></header>
+        <div class="win-body result">
+          <p class="kicker">Tu encantamiento es</p>
+          <div class="r-icon" id="rIcon" aria-hidden="true"></div>
+          <h2 class="r-name" id="rName" tabindex="-1">Filo <span id="rLevel">V</span></h2>
+          <p class="r-sub" id="rSub"></p>
+          <p class="r-quote" id="rQuote"></p>
+          <p class="r-desc" id="rDesc"></p>
+
+          <div class="r-grid">
+            <div class="r-box px"><h3>Fortalezas</h3><ul id="rStr"></ul></div>
+            <div class="r-box px"><h3>Cuidado con…</h3><ul id="rWeak"></ul></div>
+          </div>
+          <div class="r-box px wide"><h3>Cómo te ven</h3><p id="rSee"></p></div>
+          <div class="r-box px wide"><h3>Tu herramienta ideal</h3><p id="rTool"></p></div>
+
+          <h3 class="sec">Tu libro combinado</h3>
+          <div class="r-box px wide combo" id="rCombo"></div>
+
+          <h3 class="sec">Combina bien con</h3>
+          <div class="r-match" id="rMatch"></div>
+
+          <h3 class="sec">Todas tus barras</h3>
+          <ol class="bars" id="rBars"></ol>
+
+          <div class="actions wrap">
+            <button class="btn pri px" id="btnCard" type="button">Descargar tarjeta</button>
+            <button class="btn px" id="btnShare" type="button">Compartir</button>
+            <button class="btn px" id="btnAgain" type="button">Repetir test</button>
+          </div>
+          <p class="fine" id="shareMsg" role="status"></p>
+          <p class="fine"><a href="https://kitsukilove.github.io/KixKi-Store/" rel="noopener">KixKi Store</a> · Hecho con cariño por KitsukiLove</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- AJUSTES -->
+  <div id="settings" class="modal" hidden>
+    <div class="win px dlg" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+      <header class="titlebar"><span class="tb-name" id="setTitle">ajustes.exe</span><span class="tb-btns" aria-hidden="true"><i></i><i></i><i class="x"></i></span></header>
+      <div class="win-body">
+        <fieldset class="set"><legend>Tema</legend>
+          <label class="seg px"><input type="radio" name="theme" value="dark"><span>Noche</span></label>
+          <label class="seg px"><input type="radio" name="theme" value="light"><span>Día</span></label>
+        </fieldset>
+        <fieldset class="set"><legend>Estilo</legend>
+          <label class="seg px"><input type="radio" name="style" value="pixel"><span>Pixel</span></label>
+          <label class="seg px"><input type="radio" name="style" value="xp"><span>Kixki XP</span></label>
+        </fieldset>
+        <fieldset class="set"><legend>Movimiento</legend>
+          <label class="seg px"><input type="radio" name="motion" value="auto"><span>Normal</span></label>
+          <label class="seg px"><input type="radio" name="motion" value="reduce"><span>Reducido</span></label>
+        </fieldset>
+        <div class="actions"><button class="btn pri px" id="btnCloseSet" type="button">Listo</button></div>
+      </div>
+    </div>
+  </div>
+
+  <noscript><p class="noscript">Este test necesita JavaScript para funcionar.</p></noscript>
+
+  <script src="js/data.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="js/fallback2d.js"></script>
+  <script src="js/card.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
