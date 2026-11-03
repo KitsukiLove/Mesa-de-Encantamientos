@@ -74,7 +74,7 @@
     <section id="screen-result" data-screen hidden aria-labelledby="rName">
       <header class="r-head">
         <p class="kicker">Tu encantamiento es</p>
-        <h2 class="r-name" id="rName" tabindex="-1"><span id="rNameTxt">Filo</span> <span class="lv" id="rLevel">V</span></h2>
+        <h2 class="r-name" id="rName" tabindex="-1"><span id="rNameTxt">Filo</span></h2>
         <p class="r-sub" id="rSub"></p>
       </header>
       <div class="cols" id="cols" aria-hidden="true"></div>
@@ -83,27 +83,27 @@
         <button class="dock-grip" id="dockGrip" type="button" aria-expanded="false" aria-controls="dockBody" aria-label="Ampliar el panel"><i aria-hidden="true"></i></button>
         <div class="tabs" role="tablist" aria-label="Tu resultado">
           <button role="tab" id="tab-you" aria-selected="true" aria-controls="pane-you" type="button">Tú</button>
-          <button role="tab" id="tab-str" aria-selected="false" aria-controls="pane-str" type="button" tabindex="-1">Fortalezas</button>
+          <button role="tab" id="tab-lb" aria-selected="false" aria-controls="pane-lb" type="button" tabindex="-1">Lado B</button>
           <button role="tab" id="tab-mix" aria-selected="false" aria-controls="pane-mix" type="button" tabindex="-1">Combina</button>
           <button role="tab" id="tab-all" aria-selected="false" aria-controls="pane-all" type="button" tabindex="-1">Todos</button>
         </div>
         <div class="dock-body" id="dockBody">
           <div role="tabpanel" id="pane-you" aria-labelledby="tab-you">
             <p class="r-quote" id="rQuote"></p>
+            <p class="r-matiz" id="rMatiz"></p>
             <p id="rDesc"></p>
-            <h3>Cómo te ven</h3><p id="rSee"></p>
-            <h3>Tu herramienta ideal</h3><p id="rTool"></p>
           </div>
-          <div role="tabpanel" id="pane-str" aria-labelledby="tab-str" hidden>
-            <h3>Fortalezas</h3><ul id="rStr"></ul>
-            <h3>Cuidado con…</h3><ul id="rWeak"></ul>
+          <div role="tabpanel" id="pane-lb" aria-labelledby="tab-lb" hidden>
+            <h3>Tu lado B</h3><p id="rB"></p>
+            <h3>En Minecraft</h3><p id="rMc"></p>
           </div>
           <div role="tabpanel" id="pane-mix" aria-labelledby="tab-mix" hidden>
-            <h3>Tu libro combinado</h3><div class="r-box px" id="rCombo"></div>
-            <h3>Combina bien con</h3><div class="r-match" id="rMatch"></div>
+            <h3>Tu segundo encantamiento</h3><div id="rCombo"></div>
+            <h3>Con quién te llevas</h3><div class="r-match" id="rMatch"></div>
           </div>
           <div role="tabpanel" id="pane-all" aria-labelledby="tab-all" hidden>
-            <ol class="bars" id="rBars"></ol>
+            <h3>Tus encantamientos</h3><ol class="bars" id="rBars"></ol>
+            <h3>Tus rasgos</h3><ol class="bars" id="rTraits"></ol>
           </div>
         </div>
         <div class="dock-actions">
@@ -144,7 +144,7 @@
 
   <noscript><p class="noscript">Este test necesita JavaScript para funcionar.</p></noscript>
 
-  <script src="js/data.js"></script>
+  <script src="js/mesa_encantos.js"></script>
   <script src="js/icons.js"></script>
   <script src="js/engine.js"></script>
   <script src="js/scene.js"></script>
