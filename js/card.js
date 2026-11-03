@@ -1,8 +1,7 @@
 /* Tarjeta PNG para compartir (estilo "extractor de virtudes": fondo oscuro, marco, ícono y barras). */
 (function () {
   'use strict';
-  const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
-  const FONT = '"Pixelify Sans", ui-monospace, Consolas, monospace', BIG = '"Jersey 10", "Pixelify Sans", ui-monospace, Consolas, monospace';
+    const FONT = '"Pixelify Sans", ui-monospace, Consolas, monospace', BIG = '"Jersey 10", "Pixelify Sans", ui-monospace, Consolas, monospace';
 
   function wrap(ctx, text, maxW) {
     const words = text.split(/\s+/), lines = []; let line = '';
@@ -38,7 +37,7 @@
     // nombre y nivel
     let y = iy + 12 * S + 90;
     c.fillStyle = color; c.font = `74.67px ${BIG}`; spaced(c, 2);
-    c.fillText(`${info.nombre.toUpperCase()} ${ROMAN[result.lvl - 1]}`, W / 2, y); spaced(c, 0);
+    c.fillText(info.nombre.toUpperCase(), W / 2, y); spaced(c, 0);
     y += 48; c.fillStyle = '#b8aee8'; c.font = `700 24px ${FONT}`; spaced(c, 3); c.fillText(info.subtitulo.toUpperCase(), W / 2, y); spaced(c, 0);
 
     // frase

@@ -1,19 +1,26 @@
 /* Mesa de Encantos — flujo del test (libro flotante), puntuación y resultado. */
 (function () {
   'use strict';
-  const D = window.MESA, ICONS = window.MESA_ICONS, E = D.order, Q = D.q, N = Q.length, TR = 'COEAFKR';
+  /* Datos del test: js/mesa_encantos.js (preguntas, encantamientos y cálculo). Aquí solo se adaptan a la interfaz. */
+  const M = MESA_ENCANTOS, ICONS = window.MESA_ICONS;
+  const COLORS = { reparacion: '#7ef0c4', irrompibilidad: '#9aa5b8', fortuna: '#ffd36e', toque_de_seda: '#e8d8ff', eficiencia: '#5ec8ff', filo: '#ff4d4d', proteccion: '#3f7bff', espinas: '#4caf50' };
+  const KIND_OF = { 'Escenario': 'esc', 'A o B': 'ab', 'Elige un objeto': 'obj', 'Escala de orbes': 'orb' };
+  const E = M.encantamientos.map(e => e.id), D = { enchants: {} };
+  M.encantamientos.forEach(e => { D.enchants[e.id] = Object.assign({}, e, { color: COLORS[e.id] || '#b36bff' }); });
+  const Q = M.preguntas.map(p => p.tipo === 'Escala de orbes' ? { f: 'orb', t: p.texto } : { f: KIND_OF[p.tipo], t: p.texto, o: p.opciones.map(o => [o.texto]) });
+  const N = Q.length;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const root = document.documentElement;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
+  const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
   const A = window.MesaAudio;
 
   /* ---------- almacenamiento (puede fallar: privado, bloqueado, etc.) ---------- */
   const store = {
-    get(k) { try { return JSON.parse(localStorage.getItem('mesa2.' + k)); } catch (e) { return null; } },
-    set(k, v) { try { localStorage.setItem('mesa2.' + k, JSON.stringify(v)); } catch (e) { /* sin guardado */ } },
-    del(k) { try { localStorage.removeItem('mesa2.' + k); } catch (e) { /* nada */ } }
+    get(k) { try { return JSON.parse(localStorage.getItem('mesa3.' + k)); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem('mesa3.' + k, JSON.stringify(v)); } catch (e) { /* sin guardado */ } },
+    del(k) { try { localStorage.removeItem('mesa3.' + k); } catch (e) { /* nada */ } }
   };
 
   /* ---------- ajustes ---------- */
@@ -52,13 +59,9 @@
   /* ---------- partida ---------- */
   let run = null, lock = false, cur = 'intro', bubbleTimer = 0, result = null;
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  function newRun() {
-    const a = shuffle(Q.map((_, i) => i));
-    for (let i = 2; i < N; i++) {      // que no salgan tres del mismo formato seguidos
-      if (Q[a[i]].f === Q[a[i - 1]].f && Q[a[i]].f === Q[a[i - 2]].f) { const j = a.findIndex((x, k) => k > i && Q[x].f !== Q[a[i]].f); if (j > 0) { const t = a[i]; a[i] = a[j]; a[j] = t; } }
-    }
+  function newRun() {   // el orden de las preguntas es el del test; solo se mezclan las opciones de cada una
     const perm = {}; Q.forEach((q, i) => { if (q.o) perm[i] = shuffle(q.o.map((_, k) => k)); });
-    run = { order: a, perm, answers: {}, idx: 0 };
+    run = { order: Q.map((_, i) => i), perm, answers: {}, idx: 0 };
     store.set('run', run);
   }
   const answered = () => Object.keys(run.answers).length;
@@ -69,24 +72,12 @@
   }
 
   /* ---------- puntuación ---------- */
-  function compute() {
-    const raw = new Array(7).fill(0);
-    Q.forEach((q, i) => {
-      const a = run.answers[i]; if (a == null) return;
-      if (q.f === 'orb') raw[TR.indexOf(q.r)] += (q.v < 0 ? 5 - a : a - 1) / 2;
-      else { const o = q.o[a]; raw[TR.indexOf(o[1])] += 2; raw[TR.indexOf(o[2])] += 1; }
-    });
-    const z = raw.map((v, i) => (v - D.mu[i]) / D.sd[i]);
-    const aff = {}, pct = {};
-    E.forEach((e, k) => {
-      const [a, b] = D.prof[e]; aff[e] = (z[TR.indexOf(a)] + z[TR.indexOf(b)]) / Math.SQRT2 + D.off[k];
-      pct[e] = 0.08 + 0.92 * clamp((aff[e] - D.lo) / (D.hi - D.lo), 0, 1);
-    });
-    const rank = E.slice().sort((a, b) => aff[b] - aff[a] || E.indexOf(a) - E.indexOf(b));
-    return { pct, aff, rank, raw, z };
+  function compute() {   // el cálculo es calcularResultado() de js/mesa_encantos.js
+    const resp = Q.map((q, i) => run.answers[i] == null ? (q.f === 'orb' ? 3 : 0) : run.answers[i]);
+    const R = calcularResultado(resp), pct = {}, aff = {};
+    R.ranking.forEach(x => { aff[x.id] = x.puntos; pct[x.id] = clamp(_normalCDF(x.puntos / Math.SQRT2), 0.04, 1); });
+    return { R, pct, aff, rank: R.ranking.map(x => x.id) };
   }
-  const levelOf = a => 1 + D.lv.filter(v => a >= v).length;
-  window.MesaScore = { compute, levelOf };
 
   /* ---------- pantallas ---------- */
   const SCENE_OF = { intro: 'intro', quiz: 'read', ritual: 'ritual', result: 'result' };
@@ -227,9 +218,9 @@
   const h = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   function reveal() {
     clearInterval(ritualT); clearTimeout(revealT);
-    const r = compute(), win = r.rank[0], sec = r.rank[1], info = D.enchants[win], lvl = levelOf(r.aff[win]);
-    result = { r, win, sec, lvl };
-    store.set('done', { win, lvl, at: Date.now() });
+    const r = compute(), R = r.R, win = R.principal.id, sec = R.secundario.id, info = D.enchants[win], sinfo = D.enchants[sec];
+    result = { r, win, sec };
+    store.set('done', { win, at: Date.now() });
     const sr = $('#screen-result'); sr.style.setProperty('--c', info.color);
     if (scene) {
       scene.setAccent(info.color); scene.setEmblem(iconCells(win), isReduced());
@@ -237,22 +228,21 @@
       scene.reveal(); scene.happy();
     }
     A && A.play('reveal');
-    $('#rNameTxt').textContent = info.nombre; $('#rLevel').textContent = ROMAN[lvl - 1];
-    $('#rSub').textContent = info.subtitulo; $('#rQuote').textContent = '“' + info.frase + '”'; $('#rDesc').textContent = info.descripcion;
-    const fill = (id, arr) => { const ul = $(id); ul.textContent = ''; arr.forEach(t => ul.append(h('li', '', t))); };
-    fill('#rStr', info.fortalezas); fill('#rWeak', info.debilidades);
-    $('#rSee').textContent = info.como_te_ven; $('#rTool').textContent = info.herramienta_ideal;
-    const sinfo = D.enchants[sec], combo = $('#rCombo'); combo.textContent = ''; combo.style.setProperty('--c', sinfo.color);
-    const ct = h('div'); ct.append(h('b', '', `${info.nombre} ${ROMAN[lvl - 1]} + ${sinfo.nombre} ${ROMAN[levelOf(r.aff[sec]) - 1]}`), h('p', '', `Tu lado secundario es ${sinfo.nombre}: “${sinfo.frase}”`));
-    combo.append(iconCanvas(sec), ct);
+    $('#rNameTxt').textContent = info.nombre;
+    $('#rSub').textContent = info.subtitulo; $('#rQuote').textContent = '“' + info.frase + '”';
+    $('#rMatiz').textContent = cap(info.matiz) + '.'; $('#rDesc').textContent = info.retrato;
+    $('#rB').textContent = info.ladoB; $('#rMc').textContent = info.minecraft;
+    const box = (id, titulo, texto) => { const mi = D.enchants[id], b = h('div', 'r-box px'); b.style.setProperty('--c', mi.color); const t = h('div'); t.append(h('b', '', titulo), h('p', '', texto)); b.append(iconCanvas(id), t); return b; };
+    const combo = $('#rCombo'); combo.textContent = '';
+    combo.append(box(sec, sinfo.nombre, R.casiEmpate ? `Casi empatas con él: ${sinfo.subtitulo}` : `Tu lado secundario: ${sinfo.subtitulo}`));
     const match = $('#rMatch'); match.textContent = '';
-    info.combina_con.forEach(m => { const mi = D.enchants[m.id]; const box = h('div', 'r-box px'); box.style.setProperty('--c', mi.color); const t = h('div'); t.append(h('b', '', mi.nombre), h('p', '', m.razon)); box.append(iconCanvas(m.id), t); match.append(box); });
+    match.append(h('h4', '', 'Te lleva bien con'), box(info.combinaCon.id, D.enchants[info.combinaCon.id].nombre, info.combinaCon.texto),
+      h('h4', '', 'Te cuesta con'), box(info.chocaCon.id, D.enchants[info.chocaCon.id].nombre, info.chocaCon.texto));
+    const bar = (cls, lead, name, color, p, i) => { const li = h('li'); li.style.setProperty('--c', color); li.style.setProperty('--w', Math.round(p * 100) + '%'); const tr = h('div', 'tr'), fl = h('div', 'fl'); fl.style.animationDelay = (i * 0.05) + 's'; tr.append(fl); li.append(lead, h('span', 'nm', name), tr, h('span', 'pc', Math.round(p * 100) + '%')); return li; };
     const bars = $('#rBars'); bars.textContent = '';
-    r.rank.forEach((id, i) => {
-      const bi = D.enchants[id], li = h('li'); li.style.setProperty('--c', bi.color); li.style.setProperty('--w', Math.round(r.pct[id] * 100) + '%');
-      const tr = h('div', 'tr'), fl = h('div', 'fl'); fl.style.animationDelay = (i * 0.05) + 's'; tr.append(fl);
-      li.append(iconCanvas(id), h('span', 'nm', bi.nombre), tr, h('span', 'pc', Math.round(r.pct[id] * 100) + '%')); bars.append(li);
-    });
+    r.rank.forEach((id, i) => bars.append(bar('', iconCanvas(id), D.enchants[id].nombre, D.enchants[id].color, r.pct[id], i)));
+    const tb = $('#rTraits'); tb.textContent = '';
+    M.rasgos.forEach((t, i) => { const lead = h('span', 'tk', t.id); lead.title = t.definicion; tb.append(bar('', lead, t.nombre, '#6b3fe0', R.rasgos[t.id].porcentaje / 100, i)); });
     // etiquetas sobre las columnas 3D
     const cols = $('#cols'); cols.textContent = '';
     r.rank.forEach((id, i) => {
@@ -261,7 +251,7 @@
     });
     show('result'); setTab('you'); $('#dock').classList.remove('open'); $('#dockBody').scrollTop = 0; $('#shareMsg').textContent = '';
     fitName(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => cur === 'result' && fitName());
-    setTimeout(() => say(`¡Mira! Eres ${info.nombre}.`, 5200), 900);
+    setTimeout(() => say(R.casiEmpate ? `¡Casi empatas con ${sinfo.nombre}! Eres ${info.nombre}.` : `¡Mira! Eres ${info.nombre}.`, 5200), 900);
     try { $('#rName').focus({ preventScroll: true }); } catch (e) { /* sin foco */ }
   }
   function placeLabels() {
@@ -275,7 +265,7 @@
   }
 
   /* ---------- pestañas del panel ---------- */
-  const TABS = ['you', 'str', 'mix', 'all'];
+  const TABS = ['you', 'lb', 'mix', 'all'];
   function setTab(id, focus) {
     TABS.forEach(t => { const b = $('#tab-' + t), on = t === id; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; $('#pane-' + t).hidden = !on; if (on && focus) b.focus(); });
     $('#dockBody').scrollTop = 0; A && A.play('ui');
@@ -292,7 +282,7 @@
   /* ---------- compartir y tarjeta ---------- */
   function shareText() {
     const info = D.enchants[result.win];
-    return `Soy ${info.nombre} ${ROMAN[result.lvl - 1]} en la Mesa de Encantos. ¿Qué encantamiento eres tú?`;
+    return `Soy ${info.nombre} en la Mesa de Encantos. ¿Qué encantamiento eres tú?`;
   }
   async function downloadCard() {
     if (!result || !window.MesaCard) return;

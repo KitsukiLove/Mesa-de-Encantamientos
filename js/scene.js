@@ -195,7 +195,7 @@
     ringR() { return this.portrait ? 2.5 : 4.4; }
     colPos(i) {
       /* centro = rango 0; luego derecha, izquierda, derecha... sobre un arco detrás de la mesa */
-      const n = 14, side = i % 2 ? 1 : -1, step = Math.ceil(i / 2), maxStep = 7;
+      const n = this.cols.length || 8, side = i % 2 ? 1 : -1, step = Math.ceil(i / 2), maxStep = Math.max(1, Math.ceil((n - 1) / 2));
       const span = 1.3;     // radianes de media-apertura
       const a = i === 0 ? 0 : side * (step / maxStep) * span, R = this.ringR();
       return [Math.sin(a) * R, -0.5 - Math.cos(a) * R * 0.8];
@@ -337,7 +337,7 @@
       const M = mat, I = M.id(), t = this.t, narrow = this.portrait ? 0.6 : 0.95;
       this.cols.forEach(cl => {
         const g = smooth((t - this.colGrowStart - cl.rank * 0.09) / 1.1); if (g <= 0.001) return;
-        const [x, z] = this.colPos(cl.rank), h = this.colHeight(cl.pct) * g, col = cl.color, w = 0.46 * narrow;
+        const [x, z] = this.colPos(cl.rank), h = this.colHeight(cl.pct) * g, col = cl.color, w = 0.62 * narrow;
         const win = cl.rank === 0, tw = 0.88 + Math.sin(t * 3 + cl.rank) * 0.1;
         dyn(I, [x, 0.17, z], [w * 1.8, 0.12, w * 1.8], [0.45, 0.33, 0.12], win ? [0.3, 0.22, 0.04] : [0.08, 0.06, 0.02], null, 0.5);
         dyn(I, [x, 0.2 + h / 2, z], [w, h, w], col.map(v => v * 0.55), col.map(v => v * 0.38 * tw), null, 0.25);

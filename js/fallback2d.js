@@ -28,7 +28,7 @@
       },
       closedRect() { const w = this.cw, h = this.ch, s = Math.min(w, h) * 0.2; return { x: w / 2 - s * 0.7, y: h * 0.4 - s, w: s * 1.4, h: s * 1.8 }; },
       hitBook(x, y) { const r = this.closedRect(); return x > r.x - 20 && x < r.x + r.w + 20 && y > r.y - 20 && y < r.y + r.h + 20; },
-      colPos(i) { const x = this.cw * (0.5 + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.062) * (i ? 1 : 1) + (i === 0 ? 0 : 0); return x; },
+      colPos(i) { const n = this.cols.length || 8, st = 0.4 / Math.max(1, Math.ceil((n - 1) / 2)); return this.cw * (0.5 + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * st); },
       colH(pct) { return (0.1 + 0.4 * pct) * this.ch; },
       colScreen(i) { const c = this.cols[i]; if (!c) return null; const x = this.colPos(c.rank) - this.hs * this.cw / 2, y = this.ch * 0.62 - this.colH(c.pct) - this.vs * this.ch / 2 * 1; return [x, y - 6, 1]; },
       colGrown(i) { return clamp(this.colT / 8 - i * 0.05, 0, 1); },
