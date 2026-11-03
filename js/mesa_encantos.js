@@ -214,10 +214,38 @@ const MESA_ENCANTOS = {
   },
   {
    "n": 9,
-   "tipo": "Escala de orbes",
-   "texto": "Noto cuando alguien anda mal, aunque lo intente disimular.",
-   "rasgo": "A",
-   "invertida": false
+   "tipo": "Escenario",
+   "texto": "Una amiga te cuenta que algo en su vida va mal, pero se nota que no quiere hablar de eso. ¿Qué haces?",
+   "opciones": [
+    {
+     "texto": "Cambio de tema y la llevo a comer algo, sin preguntar",
+     "puntos": {
+      "A": 2,
+      "K": 1
+     }
+    },
+    {
+     "texto": "Le digo que cuando quiera hablar, aquí estoy, y me quedo cerca",
+     "puntos": {
+      "A": 2,
+      "R": 1
+     }
+    },
+    {
+     "texto": "Le pregunto directo qué pasa; si no dice, insisto otro día",
+     "puntos": {
+      "F": 2,
+      "A": 1
+     }
+    },
+    {
+     "texto": "Le dejo espacio; ya llegará ella sola",
+     "puntos": {
+      "R": 2,
+      "K": 1
+     }
+    }
+   ]
   },
   {
    "n": 10,
