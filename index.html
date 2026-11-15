@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es" data-theme="dark" data-style="pixel" data-motion="auto">
+<html lang="es" data-theme="dark" data-style="pixel" data-font="pixel" data-motion="auto">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -73,11 +73,11 @@
     <!-- RESULTADO: nombre flotante, etiquetas sobre las columnas 3D y un panel de pergamino -->
     <section id="screen-result" data-screen hidden aria-labelledby="rName">
       <header class="r-head">
-        <p class="kicker">Tu encantamiento es</p>
+        <p class="kicker" id="rKick">Tu encantamiento es</p>
         <h2 class="r-name" id="rName" tabindex="-1"><span id="rNameTxt">Filo</span></h2>
         <p class="r-sub" id="rSub"></p>
       </header>
-      <div class="cols" id="cols" aria-hidden="true"></div>
+      <div class="cols" id="cols" role="group" aria-label="Todos los encantamientos: toca uno para verlo"></div>
 
       <aside class="dock" id="dock">
         <button class="dock-grip" id="dockGrip" type="button" aria-expanded="false" aria-controls="dockBody" aria-label="Ampliar el panel"><i aria-hidden="true"></i></button>
@@ -87,6 +87,10 @@
           <button role="tab" id="tab-mix" aria-selected="false" aria-controls="pane-mix" type="button" tabindex="-1">Combina</button>
           <button role="tab" id="tab-all" aria-selected="false" aria-controls="pane-all" type="button" tabindex="-1">Todos</button>
         </div>
+        <div class="r-other" id="rOther" role="status" hidden>
+          <span id="rOtherTxt"></span>
+          <button class="btn pri sm px" id="btnMine" type="button">Volver a mi resultado</button>
+        </div>
         <div class="dock-body" id="dockBody">
           <div role="tabpanel" id="pane-you" aria-labelledby="tab-you">
             <p class="r-quote" id="rQuote"></p>
@@ -94,16 +98,17 @@
             <p id="rDesc"></p>
           </div>
           <div role="tabpanel" id="pane-lb" aria-labelledby="tab-lb" hidden>
-            <h3>Tu lado B</h3><p id="rB"></p>
+            <h3 id="hLB">Tu lado B</h3><p id="rB"></p>
             <h3>En Minecraft</h3><p id="rMc"></p>
           </div>
           <div role="tabpanel" id="pane-mix" aria-labelledby="tab-mix" hidden>
-            <h3>Tu segundo encantamiento</h3><div id="rCombo"></div>
-            <h3>Con quién te llevas</h3><div class="r-match" id="rMatch"></div>
+            <h3 id="hCombo">Tu segundo encantamiento</h3><div id="rCombo"></div>
+            <h3 id="hMatch">Con quién te llevas</h3><div class="r-match" id="rMatch"></div>
           </div>
           <div role="tabpanel" id="pane-all" aria-labelledby="tab-all" hidden>
-            <h3>Tus encantamientos</h3><ol class="bars" id="rBars"></ol>
-            <h3>Tus rasgos</h3><ol class="bars" id="rTraits"></ol>
+            <h3 id="hBars">Tus encantamientos</h3><ol class="bars" id="rBars"></ol>
+            <h3 id="hTraits">Tus rasgos</h3><ol class="bars" id="rTraits"></ol>
+            <div class="r-egg" id="rEgg" hidden><span class="r-egg-ic" aria-hidden="true"></span><div><b>Curiosidad +1</b><p>Encontraste la oveja escondida. Va aparte: no cambia tu ranking.</p></div></div>
           </div>
         </div>
         <div class="dock-actions">
@@ -126,7 +131,16 @@
       </fieldset>
       <fieldset class="set"><legend>Estilo</legend>
         <label class="seg px"><input type="radio" name="style" value="pixel"><span>Pixel</span></label>
-        <label class="seg px"><input type="radio" name="style" value="xp"><span>Kixki XP</span></label>
+        <label class="seg px"><input type="radio" name="style" value="magic"><span>Encantado</span></label>
+      </fieldset>
+      <fieldset class="set"><legend>Calidad 3D</legend>
+        <label class="seg px"><input type="radio" name="quality" value="low"><span>Pixel grueso</span></label>
+        <label class="seg px"><input type="radio" name="quality" value="mid"><span>Pixel fino</span></label>
+        <label class="seg px"><input type="radio" name="quality" value="high"><span>Nítido</span></label>
+      </fieldset>
+      <fieldset class="set"><legend>Letra</legend>
+        <label class="seg px"><input type="radio" name="font" value="pixel"><span>Pixel</span></label>
+        <label class="seg px"><input type="radio" name="font" value="system"><span>Normal</span></label>
       </fieldset>
       <fieldset class="set"><legend>Movimiento</legend>
         <label class="seg px"><input type="radio" name="motion" value="auto"><span>Normal</span></label>
