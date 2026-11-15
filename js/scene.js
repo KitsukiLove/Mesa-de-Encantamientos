@@ -36,6 +36,13 @@
     return cells;
   }
 
+  /* Niveles de calidad 3D: low = pixel grueso (como antes), mid = pixel fino, high = nítido */
+  const QUAL = {
+    low:  { levels: 6,  bloom: 0,    shaft: 0,    mist: 0,    dust: 0 },
+    mid:  { levels: 9,  bloom: 0.45, shaft: 0.5, mist: 0.45, dust: 28 },
+    high: { levels: 16, bloom: 0.5,  shaft: 0.6,  mist: 0.55, dust: 46 }
+  };
+
   class MesaScene {
     constructor(canvas, opts) {
       opts = opts || {};
@@ -51,12 +58,15 @@
       this.shift = 0; this.shiftT = 0; this.hshift = 0; this.hshiftT = 0;
       this.hover = 0; this.hoverT = 0; this.flash = 0; this.flipT = -1;
       this.happyT = 0; this.blinkT = 2; this.blinking = 0;
+      this.kx = { ox: 0, oz: 0, yaw: 0.62, ty: 0.62, hy: 0, mode: 'idle', mt: 0, next: 3, idle: 0, lie: 0, ph: 0, hop: -1, spin: -1, tx: 0, tz: 0, zt: 0, item: null, shown: null, itemK: 0, mv: 0 };
+      this.onSfx = null;
       this.parts = []; this.rand = rng(7);
+      this.quality = 'low'; this.qc = QUAL.low; this.noAdapt = false;
       this.px = 4; this.slowFrames = 0; this.last = 0; this.running = false;
       this.minDt = opts.fps30 ? 1 / 30 : 1 / 58;
       this.light = 1;
       this.emblem = defaultEmblem(); this.emblemNext = null; this.emblemT = 1;
-      this.cols = []; this.colGrow = 0;
+      this.cols = []; this.colGrow = 0; this.sel = 0; this.swapT = -1;
       this.pg = null; this.bookScr = { x: 0, y: 0, r: 0 };
       this.buildStatic();
       for (let i = 0; i < 26; i++) this.spawnMote(true);
@@ -116,12 +126,52 @@
       sb(0, 0.95, 0, 2.3, 1.3, 2.3, '#150c33', { noise: 1.3 });
       sb(0, 0.55, 1.16, 1.5, 0.12, 0.04, '#ffd36e', { emi: [0.35, 0.28, 0.05], noise: 0 });
       sb(0, 1.25, 1.16, 1.5, 0.12, 0.04, '#ffd36e', { emi: [0.35, 0.28, 0.05], noise: 0 });
-      for (let i = -2; i <= 2; i++) sb(i * 0.3, 0.9, 1.16, 0.12, 0.2, 0.04, '#b36bff', { emi: [0.35, 0.18, 0.55], noise: 0 });
+      // runas grabadas en el frente de la mesa (glifos de 5x7 pasos)
+      const GLY = [['01110', '10001', '00001', '00110', '00100', '00000', '00100'], ['00100', '01110', '10101', '00100', '10101', '01110', '00100'], ['11111', '00010', '00100', '01000', '00100', '00010', '11111'],
+        ['10001', '10010', '10100', '11000', '10100', '10010', '10001'], ['00100', '00100', '11111', '00100', '00100', '01010', '10001']];
+      GLY.forEach((g, i) => g.forEach((row, y) => [...row].forEach((ch, x) => {
+        if (ch === '1') sb((i - 2) * 0.42 + (x - 2) * 0.05, 0.9 + (3 - y) * 0.05, 1.165, 0.046, 0.046, 0.04, i % 2 ? '#e6d0ff' : '#b36bff', { emi: i % 2 ? [0.5, 0.4, 0.7] : [0.4, 0.2, 0.62], noise: 0 });
+      })));
       sb(0, 1.68, 0, 2.8, 0.3, 2.8, '#2e1d73', { noise: 1 });
       sb(0, 1.84, 0, 2.4, 0.06, 2.4, '#6b3fe0', { emi: [0.1, 0.05, 0.25], noise: 0.6 });
       [[0, 1.25], [0, -1.25], [1.25, 0], [-1.25, 0]].forEach(([x, z]) => sb(x, 1.9, z, x ? 0.1 : 2.5, 0.06, z ? 0.1 : 2.5, '#ffd36e', { emi: [0.3, 0.24, 0.04], noise: 0 }));
       [[1.3, 1.3], [-1.3, 1.3], [1.3, -1.3], [-1.3, -1.3]].forEach(([x, z]) => sb(x, 1.95, z, 0.24, 0.2, 0.24, '#ffd36e', { emi: [0.45, 0.35, 0.05], noise: 0.3 }));
       sb(0, 1.9, 0, 1.0, 0.04, 1.0, '#8a5af0', { emi: [0.2, 0.1, 0.4], noise: 0 });
+      // ---- sala: arco de piedra en escalones alrededor de la ventana ----
+      const st1 = '#2b1d5c', st2 = '#3a2878';
+      for (let a = 0; a <= 20; a++) {
+        const ang = Math.PI * a / 20, x = Math.round(Math.cos(ang) * 3.2 / 0.4) * 0.4, y = Math.round((8.2 + Math.sin(ang) * 2.4) / 0.4) * 0.4;
+        sb(x, y, -7.15, 0.62, 0.62, 0.32, a % 2 ? st1 : st2, { noise: 1.2 });
+        sb(x, y, -7.0, 0.4, 0.4, 0.06, '#ffd36e', { emi: [0.12, 0.09, 0.02], noise: 0 });
+      }
+      [-3.2, 3.2].forEach(x => { sb(x, 6.3, -7.15, 0.62, 3.8, 0.32, st1, { noise: 1.2 }); sb(x, 4.4, -7.1, 0.9, 0.24, 0.42, '#3a2878', { noise: 0.8 }); });
+      // ---- estandartes con Kixki sobre las estanterías ----
+      [[-4.7, '#5a35c8'], [4.7, '#2e5ac8']].forEach(([bx, bc]) => {
+        sb(bx, 7.95, -6.95, 1.7, 0.1, 0.1, '#ffd36e', { emi: [0.2, 0.15, 0.03], noise: 0 });
+        sb(bx, 6.45, -6.98, 1.3, 3.0, 0.06, bc, { noise: 0.5 });
+        sb(bx - 0.62, 6.45, -6.94, 0.06, 3.0, 0.05, '#ffd36e', { noise: 0 }); sb(bx + 0.62, 6.45, -6.94, 0.06, 3.0, 0.05, '#ffd36e', { noise: 0 });
+        [[0.9, 0.9], [0.6, 0.6], [0.3, 0.3]].forEach(([w, off], k) => sb(bx, 4.85 - k * 0.3, -6.98, w, 0.3, 0.06, bc, { noise: 0.5 }));
+        sb(bx, 6.6, -6.92, 0.66, 0.52, 0.06, '#f4eaff', { emi: [0.18, 0.16, 0.22], noise: 0.3 });
+        sb(bx, 6.5, -6.89, 0.34, 0.3, 0.05, '#e6b48a', { noise: 0 });
+        sb(bx - 0.08, 6.53, -6.86, 0.05, 0.06, 0.04, '#241552', { noise: 0 }); sb(bx + 0.08, 6.53, -6.86, 0.05, 0.06, 0.04, '#241552', { noise: 0 });
+        sb(bx - 0.26, 6.64, -6.9, 0.14, 0.12, 0.05, '#e6b48a', { noise: 0 }); sb(bx + 0.26, 6.64, -6.9, 0.14, 0.12, 0.05, '#e6b48a', { noise: 0 });
+        sb(bx, 6.1, -6.92, 0.7, 0.07, 0.05, '#ffd36e', { emi: [0.2, 0.15, 0.03], noise: 0 });
+      });
+      // ---- faroles colgando ----
+      [-5.9, 5.9].forEach(x => {
+        sb(x, 8.0, -3.6, 0.05, 4.2, 0.05, '#4a4a60', { noise: 0 });
+        sb(x, 5.75, -3.6, 0.62, 0.1, 0.62, '#2a2a3a', { noise: 0.4 }); sb(x, 5.0, -3.6, 0.5, 0.1, 0.5, '#2a2a3a', { noise: 0.4 });
+        sb(x, 5.38, -3.6, 0.42, 0.64, 0.42, '#ffb84d', { emi: [0.85, 0.5, 0.12], noise: 0 });
+      });
+      // ---- bordado de la alfombra ----
+      for (let i = -3; i <= 3; i++) {
+        const o = i * 0.9;
+        [[o, -2.95], [o, 2.95], [-2.95, o], [2.95, o]].forEach(([x, z]) => sb(x, 0.1, z, 0.2, 0.03, 0.2, i % 2 ? '#ffd36e' : '#b36bff', { emi: i % 2 ? [0.3, 0.24, 0.04] : [0.25, 0.12, 0.4], noise: 0 }));
+      }
+      // ---- mesa: velas (el fuego es dinámico), lapislázuli y marco de glifos ----
+      [[1.3, 1.3], [-1.3, 1.3], [1.3, -1.3], [-1.3, -1.3]].forEach(([x, z]) => sb(x, 2.2, z, 0.14, 0.32, 0.14, '#f4e6c8', { emi: [0.12, 0.1, 0.07], noise: 0 }));
+      [-1, 1].forEach(sx => [[0, 0], [0.24, 0], [0.12, 0.2]].forEach(([dx, dz], k) => sb(sx * 1.0 + dx * sx, 2.0 + (k === 2 ? 0.2 : 0), 1.0 + dz, 0.22, 0.22, 0.22, '#2a4ad8', { emi: [0.05, 0.12, 0.42], noise: 0.2 })));
+      if (B.length > 2700) console.warn('Demasiadas cajas estáticas:', B.length);
       this.eng.setStatic(B);
     }
 
@@ -160,6 +210,10 @@
           p.life += dt; if (p.life > p.max) return false;
           p.vy -= dt * 2.2; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
           o.x = p.x; o.y = p.y; o.z = p.z; o.alpha = 1 - p.life / p.max;
+        } else if (p.type === 'zz') {
+          p.life += dt; if (p.life > p.max) return false;
+          p.y += dt * 0.4; p.x += Math.sin(p.life * 2 + p.seed * 6) * dt * 0.25;
+          o.x = p.x; o.y = p.y; o.z = p.z; o.alpha = Math.sin(PI * p.life / p.max) * 0.95; o.size = p.size * (0.7 + 0.8 * p.life / p.max);
         } else {
           p.life += dt; if (p.life > p.max) { p.x = (this.rand() - 0.5) * 12; p.y = 0.4; p.z = (this.rand() - 0.5) * 8 - 1; p.life = 0; }
           p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
@@ -181,15 +235,57 @@
     setPointer(x, y) { this.pointer.x = clamp(x, -1, 1); this.pointer.y = clamp(y, -1, 1); }
     setHover(on) { this.hoverT = on ? 1 : 0; }
     happy() { this.happyT = 1.3; }
+    /* ---- KixKi: interacción ---- */
+    kixkiWorld() { const q = this.kixkiPos(); return [q[0] + this.kx.ox, 0, q[2] + this.kx.oz]; }
+    hitKixki(x, y) {
+      const w = this.kixkiWorld(), K = this.portrait ? 1.0 : 1.3, c = this.project([w[0], 0.95 * K, w[2]]), q = this.project([w[0] + 0.75 * K, 0.95 * K, w[2]]);
+      const r = Math.max(Math.abs(q[0] - c[0]), 22) * 1.25;
+      return Math.hypot(x - c[0], y - (c[1] - r * 0.25)) < r * 1.2;
+    }
+    wakeKixki() { const k = this.kx; k.idle = 0; if (k.mode === 'lie' || k.mode === 'sleep') { k.mode = 'idle'; k.mt = 0; k.next = 1.2; } }
+    activity() { this.kx.idle = 0; }
+    pokeKixki() {
+      const k = this.kx, was = k.mode === 'sleep' || k.mode === 'lie';
+      this.wakeKixki(); this.happyT = 1.0; k.mt = 0;
+      if (k.mode === 'walk') { k.mode = 'idle'; k.next = 2; }
+      if (!this.reduce) { k.hop = 0; if (this.onSfx) this.onSfx('boing'); }
+      return was ? 'wake' : 'poke';
+    }
+    cheer() { const k = this.kx; this.wakeKixki(); this.happyT = 1.6; if (!this.reduce) { k.hop = 0; k.spin = 0; } }
+    setKixkiItem(id) { this.kx.item = id || null; if (id) this.kx.shown = id; }
     setLight(v) { this.light = v; }
     turn() { this.flipT = this.reduce ? -1 : 0; }
-    reveal() { this.flash = 1; this.burst(90, true); }
+    reveal() { this.flash = 1; this.burst(90, true); this.sel = 0; this.swapT = -1; }
+    setSel(r) { this.sel = r; }
+    swap() { this.flash = Math.max(this.flash, 0.55); this.burst(this.reduce ? 6 : 46); this.swapT = this.reduce ? -1 : 0; }
     setEmblem(cells, now) { if (now || this.reduce) { this.emblem = cells; this.emblemNext = null; } else { this.emblemNext = cells; this.emblemT = 0; } }
     setColumns(list) { this.cols = list.map((c, i) => ({ id: c.id, pct: c.pct, color: hex(c.color), rank: i })); this.colGrowStart = this.t; }
+    pxFor(w, h) {
+      const q = this.quality;
+      if (q === 'high') {
+        const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1.5), 2); let tw = w * dpr;
+        if (tw * h * dpr > 2.6e6) tw = Math.sqrt(2.6e6 * w / h);
+        return Math.max(0.5, w / tw);
+      }
+      if (q === 'mid') return w < 700 ? 1.5 : 2;
+      return Math.max(2, Math.ceil(w / (w < 700 ? 300 : 520)));
+    }
     resize(w, h) {
       this.cw = w; this.ch = h;
-      this.px = Math.max(2, Math.ceil(w / (w < 700 ? 300 : 520)));
+      this.px = this.pxFor(w, h);
       this.eng.resize(w, h, this.px);
+    }
+    setQuality(q) {
+      if (!QUAL[q]) q = 'mid';
+      if (q === this.quality && this.qReady) return;
+      this.quality = q; this.qReady = true; this.qc = QUAL[q]; this.eng.setQuality(this.qc);
+      document.documentElement.dataset.gfx = q;
+      // más o menos polvo en el aire según la calidad
+      const want = 26 + this.qc.dust, have = this.parts.filter(p => p.type === 'mote').length;
+      for (let i = have; i < want; i++) this.spawnMote(true);
+      if (have > want) { let drop = have - want; this.parts = this.parts.filter(p => !(p.type === 'mote' && drop-- > 0)); }
+      this.slowFrames = 0;
+      if (this.cw) this.resize(this.cw, this.ch);
     }
     get portrait() { return this.cw / this.ch < 0.85; }
     ringR() { return this.portrait ? 2.5 : 4.4; }
@@ -212,8 +308,19 @@
       const [x, z] = this.colPos(c.rank), g = smooth((this.t - this.colGrowStart - c.rank * 0.09) / 1.1);
       return this.project([x, 0.2 + this.colHeight(c.pct) * g + 0.75, z]);
     }
-    kixkiPos() { return this.portrait ? [-1.9, 0, 2.6] : [-3.3, 0, 2.2]; }
-    kixkiScreen() { const q = this.kixkiPos(); const s = this.project([q[0], 2.5, q[2]]); return { x: s[0], y: s[1] }; }
+    hitCol(x, y) {
+      let best = -1, bd = 1e9;
+      this.cols.forEach((c, i) => {
+        if (this.colGrown(i) < 0.3) return;
+        const [px, pz] = this.colPos(c.rank), h = this.colHeight(c.pct) * this.colGrown(i), w = 0.62 * (this.portrait ? 0.6 : 0.95);
+        const b = this.project([px, 0.2, pz]), t = this.project([px, 0.2 + h + 0.4, pz]), r = this.project([px + w * 0.9, 0.2, pz]);
+        const hw = Math.max(Math.abs(r[0] - b[0]), 16);
+        if (x >= b[0] - hw && x <= b[0] + hw && y >= t[1] - 10 && y <= b[1] + 8) { const d = Math.abs(x - b[0]); if (d < bd) { bd = d; best = i; } }
+      });
+      return best;
+    }
+    kixkiPos() { return this.portrait ? [-1.5, 0, 2.1] : [-3.3, 0, 1.5]; }
+    kixkiScreen() { const q = this.kixkiWorld(); const s = this.project([q[0], 2.5, q[2]]); return { x: s[0], y: s[1] }; }
     hitBook(x, y) { const b = this.bookScr; return Math.hypot(x - b.x, y - b.y) < b.r * 1.15; }
     start() { if (this.running) return; this.running = true; this.last = performance.now(); this._raf = requestAnimationFrame(t => this.loop(t)); }
     stop() { this.running = false; cancelAnimationFrame(this._raf); }
@@ -225,7 +332,12 @@
       if (dt < this.minDt * 0.9) return;
       this.last = now; dt = Math.min(dt, 0.08);
       this.slowFrames = dt > 0.045 ? this.slowFrames + 1 : Math.max(0, this.slowFrames - 1);
-      if (this.slowFrames > 50 && this.px < 8) { this.px++; this.slowFrames = 0; this.eng.resize(this.cw, this.ch, this.px); }
+      if (this.slowFrames > 50 && !this.noAdapt) {
+        this.slowFrames = 0;
+        if (this.quality === 'high') this.setQuality('mid');
+        else if (this.quality === 'mid') this.setQuality('low');
+        else if (this.px < 8) { this.px++; this.eng.resize(this.cw, this.ch, this.px); }
+      }
       this.update(dt); this.render(); if (this.onFrame) this.onFrame();
     }
 
@@ -246,7 +358,7 @@
       if (st === 'result') {
         const fov = 44, t = Math.tan(fov * PI / 360), Rw = this.ringR() + 0.9;
         const d = clamp(Math.max(Rw / (t * eff), 12), 12, 28), dir = norm([0, 0.42, 1]), ctr = [0, 2.9, -0.6];
-        return { P: [0, 4.9, -0.4], tilt: PI / 2, roll: 0, open: 0, scl: 1.9, eye: add(ctr, dir, d), ctr, fov, energy: 0.7, spin: 0.75 };
+        return { P: [0, port ? 4.55 : 4.75, -0.4], tilt: PI / 2, roll: 0, open: 0, scl: port ? 1.3 : 1.75, eye: add(ctr, dir, d), ctr, fov, energy: 0.7, spin: 0.75 };
       }
       return { P: [0, 2.85, 0], tilt: 0.95, roll: 0, open: 0, scl: 1.3, eye: [0, 5.6, port ? 11.5 : 8.8], ctr: [0, 2.5, 0], fov: 46, energy: 0.2, spin: 0 };
     }
@@ -271,6 +383,7 @@
       this.accent = mixv(this.accent, this.accentT, 1 - Math.exp(-dt * 3));
       this.hover = lerp(this.hover, this.hoverT, 1 - Math.exp(-dt * 8));
       this.flash = Math.max(0, this.flash - dt * 0.9);
+      if (this.swapT >= 0) { this.swapT += dt / 0.95; if (this.swapT >= 1) this.swapT = -1; }
       if (this.flipT >= 0) { this.flipT += dt / 0.55; if (this.flipT >= 1) this.flipT = -1; }
       if (this.emblemNext) { this.emblemT += dt / 0.7; if (this.emblemT >= 1) { this.emblem = this.emblemNext; this.emblemNext = null; } }
       this.blinkT -= dt; if (this.blinkT < 0) { this.blinking = 0.14; this.blinkT = 2.4 + this.rand() * 2.6; }
@@ -278,7 +391,50 @@
       if (this.happyT > 0) this.happyT -= dt;
       if (st === 'ritual' && !this.ritualBurst && this.stateT > 0.5) { this.ritualBurst = true; this.burst(40); }
       if (st !== 'ritual') this.ritualBurst = false;
+      this.stepKixki(dt);
       this.partDraw = this.stepParts(dt);
+    }
+
+    stepKixki(dt) {
+      const k = this.kx, st = this.stateName, P = this.pointer, rd = !this.reduce, busy = st === 'ritual';
+      k.idle += dt; k.mt += dt; k.itemK = lerp(k.itemK, k.item ? 1 : 0, 1 - Math.exp(-dt * 5));
+      if (k.hop >= 0) { k.hop += dt / 0.6; if (k.hop >= 1) k.hop = -1; }
+      if (k.spin >= 0) { k.spin += dt / 0.85; if (k.spin >= 1) k.spin = -1; }
+      if (busy) this.wakeKixki();
+      let moving = false;
+      const bx = this.portrait ? [-0.4, 0.2] : [-0.9, 0.9], bz = this.portrait ? [-0.1, 0.6] : [-0.8, 0.4];
+      if (k.mode === 'walk') {
+        const dx = k.tx - k.ox, dz = k.tz - k.oz, d = Math.hypot(dx, dz);
+        if (d < 0.05 || busy) { k.mode = 'idle'; k.mt = 0; k.next = 2 + this.rand() * 4; }
+        else { const m = Math.min(0.8 * dt, d); k.ox += dx / d * m; k.oz += dz / d * m; k.ty = Math.atan2(dx, dz); k.ph += dt * 8.5; moving = true; }
+      } else if (k.mode === 'idle') {
+        k.ty = 0.62;
+        if (rd && !busy && k.mt > k.next) {
+          const r = this.rand();
+          if (k.idle > 24 && st !== 'ritual') { k.mode = 'lie'; k.mt = 0; }
+          else if (r < 0.5) { k.mode = 'walk'; k.tx = lerp(bx[0], bx[1], this.rand()); k.tz = lerp(bz[0], bz[1], this.rand()); }
+          else if (r < 0.85) { k.mode = 'look'; k.mt = 0; k.ty = 0.62 + (this.rand() - 0.5) * 2.2; k.next = 1.6; }
+          else { k.hop = 0; k.mt = 0; k.next = 3 + this.rand() * 3; }
+        }
+      } else if (k.mode === 'look') {
+        if (k.mt > k.next) { k.mode = 'idle'; k.mt = 0; k.next = 2 + this.rand() * 4; }
+      } else if (k.mode === 'lie') {
+        if (k.mt > 2.2) { k.mode = 'sleep'; k.mt = 0; k.zt = 0.8; }
+      } else if (k.mode === 'sleep') {
+        k.zt += dt;
+        if (k.zt > 1.8) {
+          k.zt = 0; const w = this.kixkiWorld(), K = this.portrait ? 1.0 : 1.3, y = k.yaw;
+          this.parts.push({ type: 'zz', x: w[0] + Math.sin(y) * 0.8 * K, y: 0.95 * K, z: w[2] + Math.cos(y) * 0.8 * K, life: 0, max: 2.6, glyph: 8, size: 5, seed: this.rand() });
+        }
+      }
+      k.mv = lerp(k.mv, moving ? 1 : 0, 1 - Math.exp(-dt * 8));
+      // giro suave hacia el rumbo deseado (camino más corto)
+      let da = k.ty - k.yaw; da = Math.atan2(Math.sin(da), Math.cos(da)); k.yaw += da * (1 - Math.exp(-dt * (moving ? 7 : 4)));
+      k.lie = lerp(k.lie, (k.mode === 'lie' || k.mode === 'sleep') ? 1 : 0, 1 - Math.exp(-dt * 3));
+      // la cabeza sigue al cursor
+      let hy = 0, hx = 0;
+      if (rd && k.mode !== 'sleep' && k.mode !== 'lie' && !moving) { const sk = this.kixkiScreen(), nx = sk.x / this.cw * 2 - 1; hy = clamp((P.sx - nx) * 0.8, -0.7, 0.7); hx = P.sy * 0.2; }
+      k.hy = lerp(k.hy, hy, 1 - Math.exp(-dt * 6)); k.hx = lerp(k.hx || 0, hx, 1 - Math.exp(-dt * 6));
     }
 
     /* ---------- dibujo ---------- */
@@ -299,7 +455,15 @@
       e.setLight(2, [4.2, 2.8, -2.2], [1.2 * flick(2), 0.7 * flick(2), 0.28]);
       e.setLight(3, [0, 6, -5.5], [0.5, 0.4, 1.0]);
       e.tint = mixv([1, 0.82, 0.4], acc.map(v => clamp(v * 1.2 + 0.15, 0, 1)), 0.6);
+      const day = L > 1.5 ? 0.2 : 1;
+      e.q = this.qc.bloom ? { levels: this.qc.levels, bloom: this.qc.bloom * day * (reading ? 0.75 : 1), shaft: this.qc.shaft * day * (reading ? 0.5 : 1), mist: this.qc.mist * (L > 1.5 ? 0.5 : 1) }
+        : { levels: this.qc.levels, bloom: 0, shaft: 0, mist: 0 };
       e.begin(eye, ctr, c.fov, this.shift, this.hshift);
+      if (this.qc.bloom) {
+        const wp = this.project([0, 5.4, -7.2]);
+        e.shaftUV = [wp[0] / this.cw, 1 - wp[1] / this.ch];
+        e.shaftCol = mixv([0.75, 0.62, 1], acc.map(v => v * 0.6 + 0.4), reading ? 0.15 : 0.35);
+      }
       e.drawStatic();
 
       const dyn = (parent, p, size, col, emi, rot, noise) => {
@@ -326,10 +490,37 @@
         dyn(I, [Math.cos(a) * r, cy, Math.sin(a) * r], [0.14, 0.14, 0.14], [1, 1, 1], [0.6, 0.6, 0.6], M.mul(rot, M.RY(0.7)), 0);
       }
 
+      // velas de la mesa
+      [[1.3, 1.3, 1], [-1.3, 1.3, 3], [1.3, -1.3, 5], [-1.3, -1.3, 7]].forEach(([x, z, k]) => {
+        const f = flick(k), p = M.T(x, 2.36, z);
+        dyn(p, [0, 0.1 * f, 0], [0.1, 0.14 * f, 0.1], [1, 0.5, 0.1], [0.9, 0.4, 0.06], null, 0);
+        dyn(p, [0, 0.2 * f, 0], [0.06, 0.12 * f, 0.06], [1, 0.9, 0.5], [1, 0.85, 0.4], null, 0);
+      });
+      // sello giratorio bajo el libro (toma el color del encantamiento)
+      for (let i = 0; i < 8; i++) {
+        const a = t * 0.9 * rd + i * PI / 4, r = i % 2 ? 0.5 : 0.78;
+        dyn(I, [Math.cos(a) * r, 1.96, Math.sin(a) * r], [0.12, 0.05, 0.12], acc.map(v => v * 0.6 + 0.3), acc.map(v => v * 0.8 + 0.1), M.RY(a), 0);
+      }
+      // anillo de glifos sobre el suelo, girando despacio al revés
+      for (let i = 0; i < 14; i++) {
+        const a = -t * 0.22 * rd + i / 14 * PI * 2, r = 3.5, gold = i % 2 === 0;
+        dyn(I, [Math.cos(a) * r, 0.14, Math.sin(a) * r], [gold ? 0.34 : 0.22, 0.04, gold ? 0.14 : 0.22], gold ? [1, 0.83, 0.43] : [0.7, 0.42, 1], gold ? [0.55, 0.42, 0.1] : [0.38, 0.2, 0.6], M.RY(-a), 0);
+      }
+      // libros que flotan por la sala
+      [[-6.4, 4.2, -2.4, 0, [0.42, 0.25, 0.88]], [6.2, 4.9, -2.9, 2, [0.85, 0.3, 0.55]], [-5.2, 6.4, -4.4, 4, [0.2, 0.7, 0.6]], [5.4, 3.5, -4.6, 6, [0.85, 0.6, 0.2]]].forEach(([x, y, z, k, cov]) => {
+        const root = M.mul(M.T(x, y + Math.sin(t * 1.1 + k) * 0.22 * rd, z), M.mul(M.RY(t * 0.3 * rd + k), M.RZ(Math.sin(t * 0.7 + k) * 0.12 * rd)));
+        const a = 0.4 + 0.32 * Math.sin(t * 2.6 * rd + k * 2), c = Math.cos(a), sn = Math.sin(a), ce = cov.map(v => v * 0.35);
+        dyn(root, [-0.22 * c, 0.22 * sn, 0], [0.44, 0.05, 0.6], cov, ce, M.RZ(-a), 0.4);
+        dyn(root, [0.22 * c, 0.22 * sn, 0], [0.44, 0.05, 0.6], cov, ce, M.RZ(a), 0.4);
+        dyn(root, [-0.22 * c, 0.22 * sn + 0.035, 0], [0.38, 0.03, 0.52], [0.95, 0.9, 0.78], [0.2, 0.18, 0.12], M.RZ(-a), 0);
+        dyn(root, [0.22 * c, 0.22 * sn + 0.035, 0], [0.38, 0.03, 0.52], [0.95, 0.9, 0.78], [0.2, 0.18, 0.12], M.RZ(a), 0);
+      });
+
       this.drawColumns(dyn);
       this.drawBook(dyn, by, reading, rd);
       this.drawKixki();
       e.particles(reading ? this.partDraw.filter(p => Math.hypot(p.x - eye[0], p.y - eye[1], p.z - eye[2]) > 4.2) : this.partDraw);
+      e.finish();
     }
 
     drawColumns(dyn) {
@@ -338,7 +529,7 @@
       this.cols.forEach(cl => {
         const g = smooth((t - this.colGrowStart - cl.rank * 0.09) / 1.1); if (g <= 0.001) return;
         const [x, z] = this.colPos(cl.rank), h = this.colHeight(cl.pct) * g, col = cl.color, w = 0.62 * narrow;
-        const win = cl.rank === 0, tw = 0.88 + Math.sin(t * 3 + cl.rank) * 0.1;
+        const win = cl.rank === this.sel, tw = (0.88 + Math.sin(t * 3 + cl.rank) * 0.1) * (win ? 1.35 : 1);
         dyn(I, [x, 0.17, z], [w * 1.8, 0.12, w * 1.8], [0.45, 0.33, 0.12], win ? [0.3, 0.22, 0.04] : [0.08, 0.06, 0.02], null, 0.5);
         dyn(I, [x, 0.2 + h / 2, z], [w, h, w], col.map(v => v * 0.55), col.map(v => v * 0.38 * tw), null, 0.25);
         dyn(I, [x, 0.2 + h / 2, z], [w * 0.36, h + 0.1, w * 0.36], col.map(v => v * 0.5 + 0.5), col.map(v => v * 0.35 + 0.45), null, 0);
@@ -351,7 +542,8 @@
       const e = this.eng, M = mat, b = this.bk, t = this.t, o = clamp(b.open, 0, 1), sc = b.scl;
       const sway = (reading ? 0.02 : 0.08) * Math.sin(t * 0.5) * rd, hv = this.hover;
       const lift = hv * 0.12;
-      const root0 = M.mul(M.T(b.P[0], by + lift, b.P[2]), M.mul(M.RY(this.spin.ang + sway), M.mul(M.RX(b.tilt - (reading ? 0 : Math.sin(t * 0.8) * 0.03 * rd)), M.RY(b.roll))));
+      const sw = this.swapT >= 0 ? this.swapT : 0, swUp = Math.sin(sw * PI) * 0.7, swSpin = smooth(sw) * PI * 2;
+      const root0 = M.mul(M.T(b.P[0], by + lift + swUp, b.P[2]), M.mul(M.RY(this.spin.ang + sway + swSpin), M.mul(M.RX(b.tilt - (reading ? 0 : Math.sin(t * 0.8) * 0.03 * rd)), M.RY(b.roll))));
       const root = M.mul(root0, M.mul(M.RX(0), M.T(-0.6 * (1 - o) * sc, 0, 0)));
       this.baseM = root;
       // escala: se aplica a todos los desplazamientos con una matriz de escala uniforme simulada
@@ -402,40 +594,66 @@
     }
 
     drawKixki() {
-      const e = this.eng, M = mat, t = this.t, K = this.portrait ? 1.0 : 1.3, kp = this.kixkiPos();
-      const happy = this.happyT > 0 ? Math.abs(Math.sin(t * 10)) * 0.5 * Math.min(1, this.happyT) : 0;
-      const bob = Math.sin(t * 2.2) * 0.025;
-      const yaw = 0.62 + Math.sin(t * 0.7) * 0.05 + (this.stateName === 'ritual' ? 0.15 : 0);
-      const root = M.mul(M.T(kp[0], happy * K, kp[2]), M.RY(yaw));
+      const e = this.eng, M = mat, t = this.t, k = this.kx, K = this.portrait ? 1.0 : 1.3, kp = this.kixkiWorld(), L = k.lie, rd = this.reduce ? 0 : 1;
+      const hp0 = this.happyT > 0, sleeping = k.mode === 'sleep';
+      const hopY = k.hop >= 0 ? Math.sin(PI * k.hop) * 0.95 : 0;
+      const happy = hp0 ? Math.abs(Math.sin(t * 10)) * 0.5 * Math.min(1, this.happyT) * rd : 0;
+      const bob = (Math.sin(t * (sleeping ? 1.1 : 2.2)) * (sleeping ? 0.03 : 0.025) + Math.abs(Math.sin(k.ph)) * 0.07 * k.mv);
+      const spinA = k.spin >= 0 ? smooth(k.spin) * PI * 2 : 0;
+      const yaw = k.yaw + spinA + (this.stateName === 'ritual' ? 0.15 : 0) + Math.sin(t * 0.7) * 0.04 * (1 - L);
+      const base = M.mul(M.T(kp[0], (happy + hopY) * K, kp[2]), M.RY(yaw));
       const wool = hex('#fffaf0'), woolS = hex('#d9c9f5'), skin = hex('#f7b58a'), skinD = hex('#e39a6e'), eye = hex('#2b1a5e'), cheek = hex('#ff9fb8'), scarf = hex('#6b3fe0'), hat = hex('#3b2480'), gold = hex('#ffd36e');
       const kb = (parent, p, s, col, emi, rot) => { if (!emi) emi = col === wool || col === woolS ? [0.16, 0.15, 0.2] : (col === skin || col === skinD ? [0.12, 0.07, 0.05] : null); let m = M.mul(parent, M.T(p[0] * K, p[1] * K, p[2] * K)); if (rot) m = M.mul(m, rot); e.box(m, [s[0] * K, s[1] * K, s[2] * K], col, emi, 0.55); };
-      const body = M.mul(root, M.T(0, bob * K, 0));
+      const body = M.mul(base, M.T(0, (bob - 0.43 * L) * K, 0));
       kb(body, [0, 0.95, 0], [1.0, 0.8, 1.15], wool);
       kb(body, [0, 0.66, 0], [0.9, 0.3, 1.2], woolS);
       kb(body, [0, 1.3, -0.05], [1.1, 0.34, 0.95], wool);
       kb(body, [0, 1.5, -0.25], [0.75, 0.24, 0.6], wool);
-      [[-0.3, 0.4], [0.3, 0.4], [-0.3, -0.4], [0.3, -0.4]].forEach(([x, z]) => kb(body, [x, 0.27, z], [0.22, 0.54, 0.22], skinD));
+      // patas: caminan al andar, se pliegan al acostarse
+      const hipY = lerp(0.54, 0.2, L), len = lerp(0.54, 0.2, L);
+      [[-0.3, 0.4, 0], [0.3, 0.4, 1], [-0.3, -0.4, 1], [0.3, -0.4, 0]].forEach(([x, z, ph]) => {
+        const sw = Math.sin(k.ph + ph * PI) * 0.6 * k.mv, lift = Math.max(0, Math.sin(k.ph + ph * PI)) * 0.06 * k.mv;
+        const hip = M.mul(base, M.mul(M.T(x * K, (hipY + lift) * K, (z + L * (z > 0 ? 0.25 : -0.1) * 0.8) * K), M.RX(sw)));
+        kb(hip, [0, -len / 2, 0], [0.22, len, 0.22], skinD);
+      });
       kb(body, [0, 1.0, 0.55], [0.74, 0.18, 0.5], scarf);
-      kb(body, [0.3, 0.8, 0.72], [0.16, 0.4, 0.1], scarf);
-      const nod = Math.sin(t * 2.2 + 1) * 0.03 + (this.happyT > 0 ? Math.sin(t * 10) * 0.08 : 0);
-      const head = M.mul(body, M.mul(M.T(0, 1.28 * K, 0.78 * K), M.RX(nod)));
+      kb(body, [0.3, 0.8 - 0.05 * L, 0.72], [0.16, 0.4, 0.1], scarf);
+      // cola de lana
+      kb(body, [0, 1.05, -0.62], [0.3, 0.3, 0.2], wool, null, M.RX(Math.sin(t * 4) * 0.2 * rd * (1 - L)));
+      const nod = Math.sin(t * 2.2 + 1) * 0.03 + (hp0 ? Math.sin(t * 10) * 0.08 * rd : 0) + 0.3 * L + (k.hx || 0) * (1 - L);
+      const head = M.mul(body, M.mul(M.T(0, 1.28 * K, 0.78 * K), M.mul(M.RY(k.hy * (1 - L)), M.RX(nod))));
       kb(head, [0, 0, 0], [0.64, 0.58, 0.56], skin);
       kb(head, [0, 0.33, -0.03], [0.74, 0.22, 0.64], wool);
-      const sway = Math.sin(t * 3) * 0.15;
+      const sway = Math.sin(t * 3) * 0.15 * rd * (1 - L) + (k.mv > 0.5 ? Math.sin(k.ph * 2) * 0.2 : 0) - 0.3 * L;
       kb(head, [-0.42, 0.04, -0.02], [0.2, 0.14, 0.28], skin, null, M.RZ(0.35 + sway));
       kb(head, [0.42, 0.04, -0.02], [0.2, 0.14, 0.28], skin, null, M.RZ(-0.35 - sway));
-      const closed = this.blinking > 0, hp = this.happyT > 0;
+      const closed = this.blinking > 0 || L > 0.6, hp = hp0 && L < 0.5;
       [-0.17, 0.17].forEach(x => kb(head, [x, hp ? 0.08 : 0.04, 0.29], [0.1, hp ? 0.05 : (closed ? 0.025 : 0.16), 0.04], eye));
       [-0.27, 0.27].forEach(x => kb(head, [x, -0.1, 0.29], [0.13, 0.08, 0.03], cheek, [0.12, 0.04, 0.06]));
-      kb(head, [0, -0.15, 0.29], [hp ? 0.18 : 0.1, hp ? 0.07 : 0.03, 0.03], eye);
+      kb(head, [0, -0.15, 0.29], [hp ? 0.18 : (sleeping ? 0.06 : 0.1), hp ? 0.07 : (sleeping ? 0.05 : 0.03), 0.03], eye);
       const hg = M.mul(head, M.mul(M.T(0, 0.02 * K, -0.1 * K), M.RX(-0.22)));
       kb(hg, [0, 0.5, 0], [0.86, 0.06, 0.78], hat);
       kb(hg, [0, 0.54, 0], [0.62, 0.07, 0.56], gold, [0.3, 0.24, 0.04]);
       kb(hg, [0, 0.66, 0], [0.54, 0.18, 0.5], hat);
       kb(hg, [0.01, 0.83, 0], [0.4, 0.18, 0.38], hat);
       kb(hg, [0.03, 0.99, 0], [0.28, 0.18, 0.26], hat, null, M.RZ(-0.1));
-      kb(hg, [0.1, 1.13, 0], [0.17, 0.18, 0.17], hat, null, M.RZ(-0.3 + Math.sin(t * 2.5) * 0.05));
+      kb(hg, [0.1, 1.13, 0], [0.17, 0.18, 0.17], hat, null, M.RZ(-0.3 + Math.sin(t * 2.5) * 0.05 * rd));
       kb(hg, [0.0, 0.76, 0.22], [0.09, 0.09, 0.04], gold, [0.5, 0.4, 0.06]);
+      if (k.itemK > 0.03 && k.shown) this.drawKixkiItem(body, k.shown, k.itemK, kb, t, rd);
+    }
+
+    /* accesorio según el encantamiento mostrado (al lado de KixKi, aparece creciendo) */
+    drawKixkiItem(body, id, a, kb, t, rd) {
+      const M = mat, hv = Math.sin(t * 2) * 0.04 * rd, g = hex('#8c8c9a'), dk = hex('#4a4a58'), wd = hex('#8a5a2b'), gl = hex('#ffd36e'), bl = hex('#59d7ff'), gr = hex('#52d66b'), wh = hex('#ffffff'), pu = hex('#b36bff');
+      const S = (p, s, c, em, rot) => kb(body, [p[0] * a + 0.82, p[1] * a + 1.0 + hv, p[2] * a + 0.25], [s[0] * a, s[1] * a, s[2] * a], c, em || c.map(v => v * 0.35), rot);
+      if (id === 'filo') { S([0, 0.1, 0], [0.12, 0.8, 0.05], wh); S([0, -0.3, 0], [0.4, 0.1, 0.08], gl); S([0, -0.45, 0], [0.09, 0.22, 0.07], wd); }
+      else if (id === 'eficiencia') { S([0, 0, 0], [0.09, 0.9, 0.09], wd); S([0, 0.4, 0], [0.7, 0.14, 0.1], bl); S([-0.33, 0.33, 0], [0.12, 0.14, 0.1], bl); S([0.33, 0.33, 0], [0.12, 0.14, 0.1], bl); }
+      else if (id === 'proteccion') { S([0, 0, 0], [0.55, 0.7, 0.1], hex('#3b64c8')); S([0, 0, 0.06], [0.4, 0.55, 0.06], bl); S([0, 0, 0.1], [0.12, 0.5, 0.05], gl); S([0, 0.05, 0.1], [0.4, 0.12, 0.05], gl); }
+      else if (id === 'irrompibilidad') { S([0, 0, 0], [0.5, 0.5, 0.5], hex('#3a2266'), [0.25, 0.12, 0.45], M.RX(0.6)); S([0, 0, 0], [0.34, 0.34, 0.34], pu, [0.7, 0.4, 1], M.mul(M.RY(0.8), M.RX(0.6))); }
+      else if (id === 'reparacion') { S([0, -0.25, 0], [0.62, 0.14, 0.38], dk); S([0, -0.1, 0], [0.26, 0.2, 0.26], dk); S([0, 0.08, 0], [0.7, 0.18, 0.4], g); S([0.42, 0.08, 0], [0.22, 0.12, 0.3], g); }
+      else if (id === 'fortuna') { S([0, 0, 0], [0.5, 0.2, 0.1], gr); S([0, 0, 0], [0.2, 0.5, 0.1], gr); S([0.2, 0.2, 0], [0.22, 0.22, 0.1], gl, [0.5, 0.4, 0.05]); S([-0.2, -0.2, 0], [0.22, 0.22, 0.1], gl, [0.5, 0.4, 0.05]); }
+      else if (id === 'toque_de_seda') { S([0, 0, 0], [0.55, 0.45, 0.45], wh, [0.4, 0.4, 0.5]); S([0, 0.3, 0], [0.4, 0.2, 0.4], wh, [0.4, 0.4, 0.5]); S([0, 0, 0.24], [0.5, 0.08, 0.05], pu); }
+      else if (id === 'espinas') { S([0, 0, 0], [0.38, 0.8, 0.38], hex('#2f9e4a')); [[-0.3, 0.1], [0.3, -0.1], [-0.3, -0.25], [0.3, 0.25]].forEach(([x, y]) => S([x, y, 0], [0.22, 0.07, 0.07], gr)); S([0, 0.5, 0], [0.12, 0.14, 0.12], hex('#ff6fa8')); }
     }
   }
 

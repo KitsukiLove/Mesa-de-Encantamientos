@@ -162,6 +162,16 @@
       [88, 93, 97, 100, 105].forEach((n, i) => bell(G, n - 12, t + 0.3 + i * 0.12, 0.03, { dec: 3, send: 1, echo: 0.5 }));
       osc(G, 'sine', hz(33), t, 3.4, G.fx, 0.14, 0.02, 3);
       noiseBurst(G, t, 1.4, 6000, 700, 0.06, 0.8);
+    },
+    boing(G, t) {       // KixKi salta: boing corto y grave
+      const c = G.c, o = c.createOscillator(), g = c.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(hz(55), t); o.frequency.exponentialRampToValueAtTime(hz(72), t + 0.12); o.frequency.exponentialRampToValueAtTime(hz(60), t + 0.3);
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.07, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+      o.connect(g); g.connect(G.fx); o.start(t); o.stop(t + 0.4);
+    },
+    found(G, t) {       // oveja oculta encontrada: arpegio alegre
+      [76, 81, 84, 88, 93].forEach((n, i) => bell(G, n, t + i * 0.09, 0.05, { dec: 2.4, send: 0.9, echo: 0.3 }));
+      bell(G, 64, t, 0.05, { dec: 3, send: 0.8 });
     }
   };
   function clampI(v, a, b) { v = Math.round(v); return v < a ? a : v > b ? b : v; }

@@ -995,7 +995,7 @@ const MESA_ENCANTOS = {
      }
     },
     {
-     "texto": "Una caña de pescar",
+     "texto": "Una pala",
      "puntos": {
       "K": 2,
       "A": 1

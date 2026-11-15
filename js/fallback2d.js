@@ -15,7 +15,12 @@
       defaultEmblem() { return null; },
       setState(s, instant) { this.state = s; this.stateT = 0; if (instant || this.reduce) this.open = s === 'read' ? 1 : 0; if (s === 'result') this.colT = 0; },
       setAccent(h) { this.accent = h; }, setShift(v, h) { this.vs = v || 0; this.hs = h || 0; }, setLight(v) { this.light = v; }, setPointer() { },
-      setHover(on) { this.hover = on ? 1 : 0; }, turn() { this.flip = 4; }, reveal() { this.burst(40); }, setEmblem(c) { this.emblem = c; },
+      setHover(on) { this.hover = on ? 1 : 0; }, turn() { this.flip = 4; }, reveal() { this.burst(40); }, setEmblem(c) { this.emblem = c; }, setSel(r) { this.sel = r; }, setQuality() { }, hitKixki() { return false; }, pokeKixki() { return 'poke'; }, wakeKixki() { }, activity() { }, cheer() { this.happy(); }, setKixkiItem() { }, onSfx: null, swap() { this.burst(24); },
+      hitCol(x, y) {
+        let best = -1, bd = 1e9;
+        this.cols.forEach((c, i) => { const p = this.colScreen(i); if (!p || this.colGrown(i) < 0.3) return; const base = this.ch * 0.62 - this.vs * this.ch / 2, hw = Math.max(this.cw * 0.03, 16), d = Math.abs(x - p[0]); if (d <= hw && y >= p[1] - 10 && y <= base + 8 && d < bd) { bd = d; best = i; } });
+        return best;
+      },
       setColumns(list) { this.cols = list.map((c, i) => ({ id: c.id, pct: c.pct, color: c.color, rank: i })); this.colT = 0; },
       burst(n) { for (let i = 0; i < (n || 12); i++) this.sparks.push({ x: 96 + (Math.random() - .5) * 20, y: 50, vx: (Math.random() - .5) * 3, vy: -Math.random() * 2.5 - .5, l: 14 }); },
       happy() { this.mood = 12; },

@@ -25,13 +25,14 @@
 
   /* ---------- ajustes ---------- */
   const prefersReduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const S = Object.assign({ theme: 'dark', style: 'pixel', motion: 'auto', sound: 'on', vol: 70 }, store.get('settings') || {});
+  const S = Object.assign({ theme: 'dark', style: 'pixel', font: 'pixel', quality: 'mid', motion: 'auto', sound: 'on', vol: 70 }, store.get('settings') || {});
   const isReduced = () => S.motion === 'reduce' || (S.motion === 'auto' && prefersReduce);
   let scene = null, lastSound = S.sound === 'off' ? 'on' : S.sound;
   function applySettings() {
-    root.dataset.theme = S.theme; root.dataset.style = S.style; root.dataset.motion = S.motion;
+    if (S.style === 'xp') S.style = 'magic';   // el estilo XP se sustituyó por Encantado
+    root.dataset.theme = S.theme; root.dataset.style = S.style; root.dataset.font = S.font; root.dataset.motion = S.motion;
     const m = $('meta[name="theme-color"]'); if (m) m.content = S.theme === 'light' ? '#efe6ff' : '#150c33';
-    if (scene) { scene.setLight(S.theme === 'light' ? 2.2 : 1); scene.reduce = isReduced(); }
+    if (scene) { scene.setLight(S.theme === 'light' ? 2.2 : 1); scene.reduce = isReduced(); scene.setQuality && scene.setQuality(S.quality); }
     if (A) { A.setMode(S.sound); A.setVolume(S.vol / 100); }
     const mb = $('#btnMute'), off = S.sound === 'off';
     mb.setAttribute('aria-pressed', off ? 'true' : 'false'); mb.setAttribute('aria-label', off ? 'Activar sonido' : 'Silenciar sonido');
@@ -61,13 +62,13 @@
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   function newRun() {   // el orden de las preguntas es el del test; solo se mezclan las opciones de cada una
     const perm = {}; Q.forEach((q, i) => { if (q.o) perm[i] = shuffle(q.o.map((_, k) => k)); });
-    run = { order: Q.map((_, i) => i), perm, answers: {}, idx: 0 };
+    run = { order: Q.map((_, i) => i), perm, answers: {}, idx: 0, eggAt: 4 + Math.floor(Math.random() * (N - 8)), eggPos: Math.floor(Math.random() * 4), egg: false };
     store.set('run', run);
   }
   const answered = () => Object.keys(run.answers).length;
   function loadRun() {
     const r = store.get('run');
-    if (r && Array.isArray(r.order) && r.order.length === N && r.perm && r.answers) { run = r; return true; }
+    if (r && Array.isArray(r.order) && r.order.length === N && r.perm && r.answers) { run = r; if (run.eggAt == null) { run.eggAt = 4 + Math.floor(Math.random() * (N - 8)); run.eggPos = Math.floor(Math.random() * 4); run.egg = false; } return true; }
     return false;
   }
 
@@ -104,8 +105,20 @@
 
   /* ---------- Kixki habla (solo fuera de las preguntas) ---------- */
   const bubble = $('#bubble'), bubbleText = $('#bubbleText');
-  function say(text, ms) {
-    if (cur === 'quiz') return;
+  const KX = {
+    poke: ['¡Beee!', '¡Boing!', '¡Cosquillas!', '¡Eh, que soy de lana!', '¡Otra vez, otra vez!'],
+    wake: ['Zzz… ¿eh? ¡Estoy despierta!', 'Cinco minutitos más…', '¡Ah! ¿Ya terminaste?'],
+    mile: { 9: '¡Diez ya! Vas muy bien.', 24: '¡La mitad! El libro brilla.', 39: '¡Qué recta final!', 49: '¡La última! Respira.' },
+    ench: {
+      reparacion: 'Con yunque y paciencia, todo se arregla.', irrompibilidad: 'Nada me rompe. Bueno, la obsidiana ayuda.', fortuna: '¡Un trébol! Hoy hay suerte.',
+      eficiencia: 'Pico en mano y cero rodeos.', filo: 'Directo y afilado. Me gusta.', proteccion: 'Escudo arriba: yo te cubro.',
+      toque_de_seda: 'Suave por fuera, fino por dentro.', espinas: 'Ojo: ¡pincho si me pisan!'
+    },
+    egg: '¡Encontraste la oveja escondida! Curiosidad +1.'
+  };
+  const pickOne = a => a[Math.floor(Math.random() * a.length)];
+  function say(text, ms, force) {
+    if (cur === 'quiz' && !force) return;
     bubbleText.textContent = text; bubble.hidden = false; clearTimeout(bubbleTimer);
     bubbleTimer = setTimeout(() => { bubble.hidden = true; }, ms || 4200); placeBubble();
   }
@@ -162,9 +175,31 @@
         b.append(k, t); b.addEventListener('click', () => choose(d)); opts.append(b);
       });
     }
-    setProg(run.idx);
+    setProg(run.idx); placeEgg();
     $('#btnBack').textContent = run.idx === 0 ? '« Cerrar libro' : '« Volver';
     try { $('#qText').focus({ preventScroll: true }); } catch (e) { /* sin foco */ }
+  }
+  /* ---------- la oveja escondida (curiosidad +1) ---------- */
+  const SHEEP = ['..hhhh..', '.hhhhhh.', 'wwffffww', 'wfefeffw', 'wwffffww', 'wwwmmwww', '.wwwwww.', '.l....l.'];
+  const SPAL = { h: '#3b2480', w: '#fffaf0', f: '#f7b58a', e: '#2b1a5e', m: '#ff9fb8', l: '#e39a6e' };
+  function sheepSVG(size) {
+    const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 8 8'); svg.setAttribute('width', size); svg.setAttribute('height', size); svg.setAttribute('shape-rendering', 'crispEdges'); svg.setAttribute('aria-hidden', 'true');
+    SHEEP.forEach((row, y) => [...row].forEach((c, x) => { if (c === '.') return; const r = document.createElementNS(ns, 'rect'); r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', 1); r.setAttribute('height', 1); r.setAttribute('fill', SPAL[c]); svg.append(r); }));
+    return svg;
+  }
+  function placeEgg() {
+    $$('.egg').forEach(e => e.remove());
+    if (!run || run.egg || run.idx !== run.eggAt) return;
+    const host = $('#pgL .pg-in'); if (!host) return;
+    const b = h('button', 'egg pos' + (run.eggPos % 4)); b.type = 'button'; b.setAttribute('aria-label', 'Una ovejita diminuta, escondida');
+    b.append(sheepSVG(22)); b.addEventListener('click', () => foundEgg(b)); host.append(b);
+  }
+  function foundEgg(b) {
+    if (run.egg) return;
+    run.egg = true; store.set('run', run); b.classList.add('found'); b.disabled = true;
+    A && A.play('found'); scene && scene.cheer && scene.cheer(); say(KX.egg, 3800, true);
+    setTimeout(() => b.remove(), 900);
   }
   function setProg(n) {
     $('#progFill').style.width = (n / N * 100) + '%'; $('#progN').textContent = `${Math.min(n + 1, N)} / ${N}`;
@@ -191,7 +226,7 @@
     if (run.idx >= N) return finish();
     turnPage(() => {
       showQuestion();
-      if (run.idx === 25) say('¡La mitad! El libro brilla.');
+      if (KX.mile[run.idx]) say(KX.mile[run.idx], 3200, true);
     });
   }
   function back() {
@@ -225,28 +260,31 @@
     if (scene) {
       scene.setAccent(info.color); scene.setEmblem(iconCells(win), isReduced());
       scene.setColumns(r.rank.map(id => ({ id, pct: r.pct[id], color: D.enchants[id].color })));
-      scene.reveal(); scene.happy();
+      scene.reveal(); scene.cheer(); scene.setKixkiItem(win);
     }
     A && A.play('reveal');
-    $('#rNameTxt').textContent = info.nombre;
-    $('#rSub').textContent = info.subtitulo; $('#rQuote').textContent = '“' + info.frase + '”';
-    $('#rMatiz').textContent = cap(info.matiz) + '.'; $('#rDesc').textContent = info.retrato;
-    $('#rB').textContent = info.ladoB; $('#rMc').textContent = info.minecraft;
-    const box = (id, titulo, texto) => { const mi = D.enchants[id], b = h('div', 'r-box px'); b.style.setProperty('--c', mi.color); const t = h('div'); t.append(h('b', '', titulo), h('p', '', texto)); b.append(iconCanvas(id), t); return b; };
+    selId = null; setMode(true);
+    renderProfile(win);
     const combo = $('#rCombo'); combo.textContent = '';
     combo.append(box(sec, sinfo.nombre, R.casiEmpate ? `Casi empatas con él: ${sinfo.subtitulo}` : `Tu lado secundario: ${sinfo.subtitulo}`));
-    const match = $('#rMatch'); match.textContent = '';
-    match.append(h('h4', '', 'Te lleva bien con'), box(info.combinaCon.id, D.enchants[info.combinaCon.id].nombre, info.combinaCon.texto),
-      h('h4', '', 'Te cuesta con'), box(info.chocaCon.id, D.enchants[info.chocaCon.id].nombre, info.chocaCon.texto));
     const bar = (cls, lead, name, color, p, i) => { const li = h('li'); li.style.setProperty('--c', color); li.style.setProperty('--w', Math.round(p * 100) + '%'); const tr = h('div', 'tr'), fl = h('div', 'fl'); fl.style.animationDelay = (i * 0.05) + 's'; tr.append(fl); li.append(lead, h('span', 'nm', name), tr, h('span', 'pc', Math.round(p * 100) + '%')); return li; };
     const bars = $('#rBars'); bars.textContent = '';
-    r.rank.forEach((id, i) => bars.append(bar('', iconCanvas(id), D.enchants[id].nombre, D.enchants[id].color, r.pct[id], i)));
+    r.rank.forEach((id, i) => {
+      const li = bar('', iconCanvas(id), D.enchants[id].nombre, D.enchants[id].color, r.pct[id], i);
+      li.classList.add('pick'); li.dataset.id = id; li.tabIndex = 0; li.setAttribute('role', 'button'); li.setAttribute('aria-label', 'Ver ' + D.enchants[id].nombre);
+      li.addEventListener('click', () => selectEnchant(id));
+      li.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectEnchant(id); } });
+      bars.append(li);
+    });
+    $('#rEgg').hidden = !run.egg; { const ic = $('.r-egg-ic'); ic.textContent = ''; ic.append(sheepSVG(28)); }
     const tb = $('#rTraits'); tb.textContent = '';
     M.rasgos.forEach((t, i) => { const lead = h('span', 'tk', t.id); lead.title = t.definicion; tb.append(bar('', lead, t.nombre, '#6b3fe0', R.rasgos[t.id].porcentaje / 100, i)); });
     // etiquetas sobre las columnas 3D
     const cols = $('#cols'); cols.textContent = '';
     r.rank.forEach((id, i) => {
-      const bi = D.enchants[id], l = h('div', 'col-lab' + (i === 0 ? ' win' : '')); l.style.setProperty('--c', bi.color);
+      const bi = D.enchants[id], l = h('button', 'col-lab' + (i === 0 ? ' win sel' : '')); l.type = 'button'; l.dataset.id = id; l.style.setProperty('--c', bi.color);
+      l.setAttribute('aria-label', 'Ver ' + bi.nombre + (i === 0 ? ' (tu resultado)' : '')); l.setAttribute('aria-pressed', i === 0);
+      l.addEventListener('click', () => selectEnchant(id));
       l.append(iconCanvas(id), h('span', 'n', bi.nombre), h('span', 'p', Math.round(r.pct[id] * 100) + '%')); l.style.visibility = 'hidden'; cols.append(l);
     });
     show('result'); setTab('you'); $('#dock').classList.remove('open'); $('#dockBody').scrollTop = 0; $('#shareMsg').textContent = '';
@@ -254,10 +292,52 @@
     setTimeout(() => say(R.casiEmpate ? `¡Casi empatas con ${sinfo.nombre}! Eres ${info.nombre}.` : `¡Mira! Eres ${info.nombre}.`, 5200), 900);
     try { $('#rName').focus({ preventScroll: true }); } catch (e) { /* sin foco */ }
   }
+  /* ---------- ver otros encantamientos (tocar iconos, columnas o barras) ---------- */
+  let selId = null, hinted = false;
+  const box = (id, titulo, texto) => { const mi = D.enchants[id], b = h('div', 'r-box px'); b.style.setProperty('--c', mi.color); const t = h('div'); t.append(h('b', '', titulo), h('p', '', texto)); b.append(iconCanvas(id), t); return b; };
+  function renderProfile(id) {
+    const info = D.enchants[id];
+    $('#screen-result').style.setProperty('--c', info.color);
+    $('#rNameTxt').textContent = info.nombre;
+    $('#rSub').textContent = info.subtitulo; $('#rQuote').textContent = '“' + info.frase + '”';
+    $('#rMatiz').textContent = cap(info.matiz) + '.'; $('#rDesc').textContent = info.retrato;
+    $('#rB').textContent = info.ladoB; $('#rMc').textContent = info.minecraft;
+    const match = $('#rMatch'); match.textContent = '';
+    match.append(h('h4', '', selId ? 'Se lleva bien con' : 'Te lleva bien con'), box(info.combinaCon.id, D.enchants[info.combinaCon.id].nombre, info.combinaCon.texto),
+      h('h4', '', selId ? 'Le cuesta con' : 'Te cuesta con'), box(info.chocaCon.id, D.enchants[info.chocaCon.id].nombre, info.chocaCon.texto));
+  }
+  function setMode(mine) {   // textos del panel: tu resultado o el de otro encantamiento (sin rasgos)
+    $('#rKick').textContent = mine ? 'Tu encantamiento es' : 'Encantamiento';
+    $('#tab-you').textContent = mine ? 'Tú' : 'Perfil';
+    $('#hLB').textContent = mine ? 'Tu lado B' : 'Su lado B';
+    $('#hMatch').textContent = mine ? 'Con quién te llevas' : 'Con quién se lleva';
+    $('#hBars').textContent = mine ? 'Tus encantamientos' : 'Encantamientos';
+    ['#hCombo', '#rCombo', '#hTraits', '#rTraits'].forEach(q => { $(q).hidden = !mine; });
+    $('#rOther').hidden = mine; $('#rEgg').hidden = !mine || !(run && run.egg);
+  }
+  function selectEnchant(id) {
+    if (!result || cur !== 'result') return;
+    const mine = id === result.win, now = mine ? null : id;
+    if (now === selId) return;
+    selId = now;
+    const info = D.enchants[id], rank = result.r.rank.indexOf(id);
+    setMode(mine); renderProfile(id);
+    if (!mine) $('#rOtherTxt').textContent = `No es tu resultado · afinidad ${Math.round(result.r.pct[id] * 100)}% · puesto ${rank + 1} de ${result.r.rank.length}`;
+    if (scene) { scene.setAccent(info.color); scene.setEmblem(iconCells(id), isReduced()); scene.setSel(rank); scene.swap(); scene.setKixkiItem(id); }
+    $$('#cols .col-lab').forEach(l => { const on = l.dataset.id === id; l.classList.toggle('sel', on); l.setAttribute('aria-pressed', on); });
+    $$('#rBars li').forEach(li => li.classList.toggle('cur', li.dataset.id === id));
+    ['#rName', '#rSub', '#dockBody'].forEach(q => { const e = $(q); e.classList.remove('swapin'); void e.offsetWidth; e.classList.add('swapin'); });
+    setTab('you', false, true); $('#dock').classList.remove('open'); $('#dockGrip').setAttribute('aria-expanded', false);
+    fitName(); A && A.play('flip'); requestAnimationFrame(updateShift);
+    setTimeout(() => say(!hinted && !mine ? `${info.nombre}: ${KX.ench[id]} ¡Toca otro o vuelve al tuyo!` : KX.ench[id], 4200), 600); if (!mine) hinted = true;
+  }
+  $('#btnMine').addEventListener('click', () => result && selectEnchant(result.win));
+
   function placeLabels() {
     if (cur !== 'result' || !scene.colScreen) return;
+    const dr = $('#dock').getBoundingClientRect(), under = dr.width > innerWidth * 0.8 ? dr.top : 1e9;   // panel inferior: oculta lo que queda debajo
     $$('#cols .col-lab').forEach((l, i) => {
-      const p = scene.colScreen(i); if (!p || p[2] <= 0) { l.style.visibility = 'hidden'; return; }
+      const p = scene.colScreen(i); if (!p || p[2] <= 0 || p[1] > under - 6) { l.style.visibility = 'hidden'; return; }
       const g = scene.colGrown ? scene.colGrown(i) : 1;
       l.style.visibility = g > 0.35 ? 'visible' : 'hidden';
       l.style.transform = `translate(${Math.round(p[0])}px, ${Math.round(p[1])}px) translate(-50%, -100%)`;
@@ -266,9 +346,9 @@
 
   /* ---------- pestañas del panel ---------- */
   const TABS = ['you', 'lb', 'mix', 'all'];
-  function setTab(id, focus) {
+  function setTab(id, focus, quiet) {
     TABS.forEach(t => { const b = $('#tab-' + t), on = t === id; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; $('#pane-' + t).hidden = !on; if (on && focus) b.focus(); });
-    $('#dockBody').scrollTop = 0; A && A.play('ui');
+    $('#dockBody').scrollTop = 0; if (!quiet) A && A.play('ui');
   }
   $$('.tabs button').forEach(b => {
     b.addEventListener('click', () => setTab(b.id.slice(4)));
@@ -362,7 +442,7 @@
   $('#btnResume').addEventListener('click', startFresh);
   $('#btnBack').addEventListener('click', back);
   $('#btnHome').addEventListener('click', goIntro);
-  $('#btnAgain').addEventListener('click', () => { store.del('run'); store.del('done'); result = null; scene && (scene.setAccent('#b36bff'), scene.setEmblem(scene.defaultEmblem(), false)); goIntro(); });
+  $('#btnAgain').addEventListener('click', () => { store.del('run'); store.del('done'); result = null; scene && (scene.setKixkiItem(null), scene.setAccent('#b36bff'), scene.setEmblem(scene.defaultEmblem(), false)); goIntro(); });
   $('#btnCard').addEventListener('click', downloadCard);
   $('#btnShare').addEventListener('click', share);
   $('#btnSettings').addEventListener('click', openSettings);
@@ -382,9 +462,20 @@
   let rz = 0; addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(fit); });
   addEventListener('pointermove', e => {
     if (e.pointerType !== 'touch') scene.setPointer((e.clientX / innerWidth - 0.5) * 2, (e.clientY / innerHeight - 0.5) * 2);
+    scene.activity && scene.activity();
+    if (e.pointerType !== 'touch' && e.target === canvas && cur !== 'intro') canvas.style.cursor = (onKixki(e) || (cur === 'result' && scene.hitCol && scene.hitCol(e.clientX, e.clientY) >= 0)) ? 'pointer' : '';
     if (cur === 'intro' && e.pointerType !== 'touch' && e.target === canvas) { const on = scene.hitBook(e.clientX, e.clientY); scene.setHover(on); document.body.classList.toggle('hover-book', on); }
   }, { passive: true });
-  canvas.addEventListener('click', e => { if (cur === 'intro' && scene.hitBook(e.clientX, e.clientY)) openBook(); });
+  scene.onSfx = n => A && A.play(n);
+  const onKixki = e => scene.hitKixki && scene.hitKixki(e.clientX, e.clientY);
+  addEventListener('pointerdown', e => { if (!(e.target === canvas && onKixki(e))) scene.wakeKixki && scene.wakeKixki(); }, { passive: true });
+  addEventListener('keydown', () => { scene.wakeKixki && scene.wakeKixki(); }, { passive: true });
+  canvas.addEventListener('click', e => {
+    if (onKixki(e)) { unlockAudio(); const r = scene.pokeKixki(); say(pickOne(r === 'wake' ? KX.wake : KX.poke), 2400, true); return; }
+    if (cur === 'intro' && scene.hitBook(e.clientX, e.clientY)) openBook();
+    else if (cur === 'result' && result && scene.hitCol) { const i = scene.hitCol(e.clientX, e.clientY); if (i >= 0) selectEnchant(result.r.rank[i]); }
+  });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && cur === 'result' && selId && $('#settings').hidden) selectEnchant(result.win); });
   addEventListener('deviceorientation', e => { if (e.gamma != null && e.beta != null) scene.setPointer(e.gamma / 28, (e.beta - 50) / 28); }, { passive: true });
   fit(); scene.setState('intro', true); scene.start();
   refreshResume(); show('intro');

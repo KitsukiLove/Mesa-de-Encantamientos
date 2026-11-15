@@ -44,7 +44,7 @@ void main(){
 precision mediump float;
 varying vec3 v_wp; varying vec3 v_n; varying vec3 v_col; varying vec3 v_emi; varying vec2 v_misc;
 uniform vec3 u_cam; uniform vec3 u_amb; uniform vec3 u_fog; uniform float u_fogd; uniform float u_time;
-uniform vec3 u_lp[4]; uniform vec3 u_lc[4]; uniform vec3 u_moonD; uniform vec3 u_moonC;
+uniform vec3 u_lp[4]; uniform vec3 u_lc[4]; uniform vec3 u_moonD; uniform vec3 u_moonC; uniform float u_lv; uniform float u_mist;
 float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float bayer(vec2 p){
   vec2 q = mod(floor(p), 4.0);
@@ -70,9 +70,14 @@ void main(){
   }
   light += u_moonC * max(dot(n, u_moonD), 0.0);
   float bd = bayer(gl_FragCoord.xy) - 0.5;
-  vec3 lit = floor(light * 6.0 + bd + 0.5) / 6.0;
+  vec3 lit = floor(light * u_lv + bd + 0.5) / u_lv;
   vec3 c = col * lit + v_emi;
   float fd = length(u_cam - v_wp);
+  if (u_mist > 0.0) {
+    float mh = exp(-max(v_wp.y, 0.0) * 0.5);
+    float mf = (1.0 - exp(-fd * 0.07)) * mh * u_mist * (0.8 + 0.2 * sin(v_wp.x * 0.9 + v_wp.z * 0.7 + u_time * 0.35));
+    c = mix(c, clamp(u_fog * 2.2 + vec3(0.06, 0.04, 0.12), 0.0, 1.0), clamp(mf, 0.0, 0.6));
+  }
   float f = 1.0 - exp(-fd * u_fogd);
   gl_FragColor = vec4(mix(c, u_fog, clamp(f, 0.0, 1.0)), 1.0);
 }`;
@@ -91,14 +96,42 @@ precision mediump float;
 varying float v_glyph; varying float v_alpha; varying float v_seed;
 uniform sampler2D u_atlas; uniform vec3 u_tint;
 void main(){
-  vec2 uv = vec2((v_glyph + gl_PointCoord.x) / 8.0, gl_PointCoord.y);
+  vec2 uv = vec2((v_glyph + gl_PointCoord.x) / 9.0, gl_PointCoord.y);
   float a = texture2D(u_atlas, uv).a;
   if (a < 0.5) discard;
   vec3 c = mix(u_tint, vec3(1.0), v_seed * 0.12);
   gl_FragColor = vec4(c * v_alpha, 1.0);
 }`;
 
-  /* ---------- runas (atlas 8 glifos de 8x8) ---------- */
+
+  const VS_QUAD = `
+attribute vec2 a_q; varying vec2 v_uv;
+void main(){ v_uv = a_q * 0.5 + 0.5; gl_Position = vec4(a_q, 0.0, 1.0); }`;
+  const FS_BRIGHT = `
+precision mediump float; varying vec2 v_uv; uniform sampler2D u_t; uniform float u_thr;
+void main(){ vec3 c = texture2D(u_t, v_uv).rgb; float l = max(c.r, max(c.g, c.b)); float k = smoothstep(u_thr, u_thr + 0.3, l); gl_FragColor = vec4(c * k, 1.0); }`;
+  const FS_BLUR = `
+precision mediump float; varying vec2 v_uv; uniform sampler2D u_t; uniform vec2 u_dir;
+void main(){
+  vec3 s = texture2D(u_t, v_uv).rgb * 0.227027;
+  s += (texture2D(u_t, v_uv + u_dir * 1.3846).rgb + texture2D(u_t, v_uv - u_dir * 1.3846).rgb) * 0.316216;
+  s += (texture2D(u_t, v_uv + u_dir * 3.2308).rgb + texture2D(u_t, v_uv - u_dir * 3.2308).rgb) * 0.070270;
+  gl_FragColor = vec4(s, 1.0);
+}`;
+  const FS_COMP = `
+precision mediump float; varying vec2 v_uv; uniform sampler2D u_scene; uniform sampler2D u_bloom;
+uniform float u_bs; uniform vec2 u_ls; uniform float u_sh; uniform vec3 u_shc;
+void main(){
+  vec3 c = texture2D(u_scene, v_uv).rgb + texture2D(u_bloom, v_uv).rgb * u_bs;
+  if (u_sh > 0.0) {
+    vec2 d = (u_ls - v_uv) / 22.0, p = v_uv; float il = 0.0, w = 1.0;
+    for (int i = 0; i < 22; i++) { p += d; il += dot(texture2D(u_bloom, p).rgb, vec3(0.34)) * w; w *= 0.93; }
+    c += u_shc * il * u_sh * 0.11;
+  }
+  gl_FragColor = vec4(c, 1.0);
+}`;
+
+  /* ---------- runas (atlas 9 glifos de 8x8) ---------- */
   const RUNES = [
     ['0010000', '0111100', '0010010', '0111100', '0010010', '0010000', '0010000'],
     ['0100010', '0100100', '0111000', '0100100', '0100010', '0100001', '0000000'],
@@ -107,10 +140,11 @@ void main(){
     ['0111110', '0000010', '0000100', '0011000', '0000100', '0000010', '0111110'],
     ['0100000', '0110000', '0101000', '0100100', '0100010', '0100001', '0111111'],
     ['0010100', '0010100', '0111110', '0010100', '0010100', '0111110', '0010100'],
-    ['0001000', '0001000', '0111110', '0001000', '0001000', '0000000', '0000000']
+    ['0001000', '0001000', '0111110', '0001000', '0001000', '0000000', '0000000'],
+    ['0111110', '0000100', '0001000', '0010000', '0100000', '0111110', '0000000']
   ];
   function makeAtlas(gl) {
-    const cv = document.createElement('canvas'); cv.width = 64; cv.height = 8;
+    const cv = document.createElement('canvas'); cv.width = 72; cv.height = 8;
     const x = cv.getContext('2d'); x.fillStyle = '#fff';
     RUNES.forEach((g, i) => g.forEach((row, y) => [...row].forEach((ch, xx) => { if (ch === '1') x.fillRect(i * 8 + xx, y, 1, 1); })));
     const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
@@ -158,7 +192,7 @@ void main(){
       this.u = {
         vp: L(m, 'u_vp'), model: L(m, 'u_model'), size: L(m, 'u_size'), cam: L(m, 'u_cam'), amb: L(m, 'u_amb'),
         fog: L(m, 'u_fog'), fogd: L(m, 'u_fogd'), time: L(m, 'u_time'), lp: L(m, 'u_lp[0]'), lc: L(m, 'u_lc[0]'),
-        moonD: L(m, 'u_moonD'), moonC: L(m, 'u_moonC')
+        moonD: L(m, 'u_moonD'), moonC: L(m, 'u_moonC'), lv: L(m, 'u_lv'), mist: L(m, 'u_mist')
       };
       this.a = { pos: A(m, 'a_pos'), nrm: A(m, 'a_nrm'), col: A(m, 'a_col'), emi: A(m, 'a_emi'), misc: A(m, 'a_misc') };
       const pp = this.pPart;
@@ -170,6 +204,8 @@ void main(){
       this.cubeVB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, this.cubeVB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
       this.cubeIB = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.cubeIB); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(CUBE_IDX), gl.STATIC_DRAW);
       this.partVB = gl.createBuffer();
+      this.quadVB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, this.quadVB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      this.q = { levels: 6, bloom: 0, shaft: 0, mist: 0 }; this.post = null; this.shaftUV = [0.5, 0.8]; this.shaftCol = [0.8, 0.7, 1];
       this.staticVB = null; this.staticIB = null; this.staticN = 0;
       this.lightsP = new Float32Array(12); this.lightsC = new Float32Array(12);
       this.vp = mat.id(); this.cam = [0, 5, 9];
@@ -177,6 +213,63 @@ void main(){
       this.moonD = [0, 0.5, 0.8]; this.moonC = [0.15, 0.15, 0.3];
       this.tint = [1, 0.85, 0.5]; this.time = 0; this.pscale = 40;
       this._part = new Float32Array(7 * 400);
+    }
+
+    /* ---------- postproceso: bloom + haces de luz (solo calidad fina / nítida) ---------- */
+    mkTarget(w, h, depth) {
+      const gl = this.gl, tex = gl.createTexture(), fbo = gl.createFramebuffer(); let rb = null;
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      const f = depth ? gl.NEAREST : gl.LINEAR;
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      if (depth) { rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb); }
+      return { tex, fbo, rb, w, h };
+    }
+    freeTarget(t) { const gl = this.gl; if (!t) return; gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); if (t.rb) gl.deleteRenderbuffer(t.rb); }
+    targets() {
+      const gl = this.gl, w = this.canvas.width, h = this.canvas.height, P = this.post;
+      if (P && P.w === w && P.h === h) return P;
+      if (P) { this.freeTarget(P.scene); this.freeTarget(P.a); this.freeTarget(P.b); }
+      if (!this.pBright) {
+        const L = (p, n) => gl.getUniformLocation(p, n);
+        this.pBright = compile(gl, VS_QUAD, FS_BRIGHT); this.pBlur = compile(gl, VS_QUAD, FS_BLUR); this.pComp = compile(gl, VS_QUAD, FS_COMP);
+        this.uB = { t: L(this.pBright, 'u_t'), thr: L(this.pBright, 'u_thr') };
+        this.uBl = { t: L(this.pBlur, 'u_t'), dir: L(this.pBlur, 'u_dir') };
+        this.uC = { scene: L(this.pComp, 'u_scene'), bloom: L(this.pComp, 'u_bloom'), bs: L(this.pComp, 'u_bs'), ls: L(this.pComp, 'u_ls'), sh: L(this.pComp, 'u_sh'), shc: L(this.pComp, 'u_shc') };
+        this.aq = [this.pBright, this.pBlur, this.pComp].map(p => gl.getAttribLocation(p, 'a_q'));
+      }
+      const sw = Math.max(32, w >> 2), sh = Math.max(32, h >> 2);
+      this.post = { w, h, scene: this.mkTarget(w, h, true), a: this.mkTarget(sw, sh, false), b: this.mkTarget(sw, sh, false) };
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return this.post;
+    }
+    quad(prog, k) {
+      const gl = this.gl, loc = this.aq[k];
+      gl.useProgram(prog); gl.bindBuffer(gl.ARRAY_BUFFER, this.quadVB);
+      gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.disableVertexAttribArray(loc);
+    }
+    finish() {
+      if (!(this.q.bloom > 0) || !this.post) return;
+      const gl = this.gl, P = this.post, W = this.canvas.width, H = this.canvas.height;
+      for (let i = 0; i < 8; i++) gl.disableVertexAttribArray(i);
+      gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.depthMask(true);
+      const bind = (t, tex) => { gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.fbo : null); gl.viewport(0, 0, t ? t.w : W, t ? t.h : H); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); };
+      bind(P.a, P.scene.tex); gl.useProgram(this.pBright); gl.uniform1i(this.uB.t, 0); gl.uniform1f(this.uB.thr, 0.62); this.quad(this.pBright, 0);
+      for (let i = 0; i < 2; i++) {
+        bind(P.b, P.a.tex); gl.useProgram(this.pBlur); gl.uniform1i(this.uBl.t, 0); gl.uniform2f(this.uBl.dir, 1 / P.a.w, 0); this.quad(this.pBlur, 1);
+        bind(P.a, P.b.tex); gl.useProgram(this.pBlur); gl.uniform1i(this.uBl.t, 0); gl.uniform2f(this.uBl.dir, 0, 1 / P.a.h); this.quad(this.pBlur, 1);
+      }
+      bind(null, P.scene.tex);
+      gl.useProgram(this.pComp); gl.uniform1i(this.uC.scene, 0);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, P.a.tex); gl.uniform1i(this.uC.bloom, 1);
+      gl.uniform1f(this.uC.bs, this.q.bloom); gl.uniform2f(this.uC.ls, this.shaftUV[0], this.shaftUV[1]);
+      gl.uniform1f(this.uC.sh, this.q.shaft); gl.uniform3fv(this.uC.shc, this.shaftCol);
+      this.quad(this.pComp, 2);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, null); gl.activeTexture(gl.TEXTURE0);
+      gl.enable(gl.DEPTH_TEST); this._dyn = false;
     }
 
     /* Lote estático: lista de {c:[x,y,z], s:[sx,sy,sz], col:[r,g,b], emi:[r,g,b], noise, grid} */
@@ -204,10 +297,14 @@ void main(){
       this.gl.viewport(0, 0, w, h); this.px = px;
     }
 
+    setQuality(q) { this.q = q; }
+
     begin(eye, ctr, fov, vshift, hshift) {
       const gl = this.gl, c = this.canvas;
       const P = mat.persp(fov * Math.PI / 180, c.width / c.height, 0.1, 80); P[9] = -(vshift || 0); P[8] = (hshift || 0);
       this.vp = mat.mul(P, mat.look(eye, ctr, [0, 1, 0])); this.cam = eye;
+      const T = this.q.bloom > 0 ? this.targets() : null;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, T ? T.scene.fbo : null); gl.viewport(0, 0, c.width, c.height);
       gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.depthMask(true);
       gl.clearColor(this.fog[0], this.fog[1], this.fog[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.useProgram(this.pMesh);
@@ -216,6 +313,7 @@ void main(){
       gl.uniform3fv(u.fog, this.fog); gl.uniform1f(u.fogd, this.fogd); gl.uniform1f(u.time, this.time);
       gl.uniform3fv(u.lp, this.lightsP); gl.uniform3fv(u.lc, this.lightsC);
       gl.uniform3fv(u.moonD, this.moonD); gl.uniform3fv(u.moonC, this.moonC);
+      gl.uniform1f(u.lv, this.q.levels); gl.uniform1f(u.mist, this.q.mist);
     }
 
     setLight(i, pos, col) { this.lightsP.set(pos, i * 3); this.lightsC.set(col, i * 3); }
